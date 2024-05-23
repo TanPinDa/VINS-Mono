@@ -1,4 +1,4 @@
-#include "pose_graph.h"
+#include "pose_graph/pose_graph.h"
 
 PoseGraph::PoseGraph()
 {

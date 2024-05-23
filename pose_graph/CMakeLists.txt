@@ -21,25 +21,38 @@ find_package(camodocal REQUIRED)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Eigen3)
 
-include_directories(${catkin_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS}  ${EIGEN3_INCLUDE_DIR})
+# include_directories( ${CERES_INCLUDE_DIRS}  ${EIGEN3_INCLUDE_DIR})
 
 catkin_package()
 
-add_executable(pose_graph
-    src/pose_graph_node.cpp
+add_subdirectory(src/ThirdParty)
+
+add_library(pose_graph STATIC
     src/pose_graph.cpp
     src/keyframe.cpp
     src/utility/CameraPoseVisualization.cpp
-    src/ThirdParty/DBoW/BowVector.cpp
-    src/ThirdParty/DBoW/FBrief.cpp
-    src/ThirdParty/DBoW/FeatureVector.cpp
-    src/ThirdParty/DBoW/QueryResults.cpp
-    src/ThirdParty/DBoW/ScoringObject.cpp
-    src/ThirdParty/DUtils/Random.cpp
-    src/ThirdParty/DUtils/Timestamp.cpp
-    src/ThirdParty/DVision/BRIEF.cpp
-    src/ThirdParty/VocabularyBinary.cpp
+    )
+target_link_libraries(pose_graph 
+    DBoW
+    DUtils
+    DVision
+    VocabularyBinary
+    ${catkin_LIBRARIES} 
+    ${OpenCV_LIBS} 
+    ${CERES_LIBRARIES}
+    )
+target_include_directories(pose_graph PUBLIC 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    ${OpenCV_INCLUDE_DIRS} 
+    ${CERES_INCLUDE_DIRS}
+    ${catkin_INCLUDE_DIRS}
     )
 
-target_link_libraries(pose_graph ${catkin_LIBRARIES}  ${OpenCV_LIBS} ${CERES_LIBRARIES} camodocal) 
+add_executable(pose_graph_node
+    src/pose_graph_node.cpp
+    )
+
+
+target_link_libraries(pose_graph_node pose_graph camodocal)
 # message("catkin_lib  ${catkin_LIBRARIES}")

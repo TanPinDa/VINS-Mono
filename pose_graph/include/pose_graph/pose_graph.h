@@ -19,10 +19,10 @@
 #include "utility/utility.h"
 #include "utility/CameraPoseVisualization.h"
 #include "utility/tic_toc.h"
-#include "ThirdParty/DBoW/DBoW2.h"
-#include "ThirdParty/DVision/DVision.h"
-#include "ThirdParty/DBoW/TemplatedDatabase.h"
-#include "ThirdParty/DBoW/TemplatedVocabulary.h"
+#include "DBoW2.h"
+#include "DVision.h"
+#include "TemplatedDatabase.h"
+#include "TemplatedVocabulary.h"
 
 
 #define SHOW_S_EDGE false
