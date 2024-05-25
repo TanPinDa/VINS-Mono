@@ -1,0 +1,19 @@
+diff --git a/cmake/FindGlog.cmake b/cmake/FindGlog.cmake
+index 2ef6914..ee16817 100644
+--- a/cmake/FindGlog.cmake
++++ b/cmake/FindGlog.cmake
+@@ -346,9 +346,11 @@ if (NOT GLOG_FOUND)
+     NOT "${LOWERCASE_GLOG_LIBRARY}" MATCHES ".*glog[^/]*")
+ 
+   # add glog::glog target
+-  add_library(glog::glog INTERFACE IMPORTED)
+-  target_include_directories(glog::glog INTERFACE ${GLOG_INCLUDE_DIRS})
+-  target_link_libraries(glog::glog INTERFACE ${GLOG_LIBRARY})
++  if (NOT TARGET glog::glog)
++    add_library(glog::glog INTERFACE IMPORTED)
++    target_include_directories(glog::glog INTERFACE ${GLOG_INCLUDE_DIRS})
++    target_link_libraries(glog::glog INTERFACE ${GLOG_LIBRARY})
++  endif()
+ 
+   glog_reset_find_library_prefix()
+ 
