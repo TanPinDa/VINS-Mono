@@ -1,0 +1,18 @@
+{
+    "files.associations": {
+        "*.rviz": "yaml",
+        "*.srdf": "xml",
+        "*.urdf": "xml",
+        "*.xacro": "xml",
+        "functional": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp"
+    },
+    "cmake.sourceDirectory": "/home/rosdev/workspace/ros_ws/src/VINS-Mono/benchmark_publisher",
+    "C_Cpp.clang_format_fallbackStyle": "Google",
+    "C_Cpp.clang_format_style": "Google",
+    "C_Cpp.default.cppStandard": "c++17",
+}
