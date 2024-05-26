@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>pose_graph</name>
+  <name>pose_graph_ros</name>
   <version>0.0.0</version>
-  <description>pose_graph package</description>
+  <description>pose_graph_ros package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
   <!-- Example:  -->
@@ -40,6 +40,9 @@
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>camera_model</build_depend>
+  <build_depend>pose_graph</build_depend>
+  <run_depend>camera_model</run_depend>
 
 
 

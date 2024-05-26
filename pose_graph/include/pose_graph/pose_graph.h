@@ -13,7 +13,6 @@
 #include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <stdio.h>
-#include <ros/ros.h>
 #include "keyframe.h"
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
