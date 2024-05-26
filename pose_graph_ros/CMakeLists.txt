@@ -16,7 +16,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV)
 find_package(camodocal REQUIRED)
-# find_package(Ceres REQUIRED) # TODO Remove because it causes failure due to multiple GLOG. 
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Eigen3)
@@ -27,10 +26,13 @@ catkin_package()
 
 add_executable(pose_graph_node
     src/pose_graph_node.cpp
+    src/utility/CameraPoseVisualization.cpp
     )
 
 target_link_libraries(pose_graph_node pose_graph ${catkin_LIBRARIES} camodocal::camodocal)
-# target_include_directories(pose_graph_node PUBLIC
-#     ${catkin_INCLUDE_DIRS}
-# )
+target_include_directories(pose_graph_node PUBLIC
+    ${catkin_INCLUDE_DIRS}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 # message("catkin_lib  ${catkin_LIBRARIES}")

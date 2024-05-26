@@ -462,11 +462,15 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	            	cv::imshow("loop connection",loop_match_img);
 	            	cv::waitKey(10);
 	            	*/
-	            	cv::Mat thumbimage;
-	            	cv::resize(loop_match_img, thumbimage, cv::Size(loop_match_img.cols / 2, loop_match_img.rows / 2));
-	    	    	sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumbimage).toImageMsg();
-	                msg->header.stamp = ros::Time(time_stamp);
-	    	    	pub_match_img.publish(msg);
+					// reset thumbimage_
+					{
+						std::lock_guard<std::mutex> lock(m_thumbimage_);
+						thumbimage_ = cv::Mat();
+						cv::resize(loop_match_img, thumbimage_, cv::Size(loop_match_img.cols / 2, loop_match_img.rows / 2));
+					}
+					// sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumbimage).toImageMsg();
+	                // msg->header.stamp = ros::Time(time_stamp);
+	    	    	// pub_match_img.publish(msg);
 	            }
 	        }
 	    #endif
@@ -513,6 +517,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 			    t_q_index.values.push_back(Q.z());
 			    t_q_index.values.push_back(index);
 			    msg_match_points.channels.push_back(t_q_index);
+				// TODO : move this out of class
 			    pub_match_points.publish(msg_match_points);
 	    	}
 	        return true;
@@ -522,6 +527,11 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	return false;
 }
 
+cv::Mat KeyFrame::getThumbImage()
+{
+	std::lock_guard<std::mutex> lock(m_thumbimage_);
+	return thumbimage_.clone();
+}
 
 int KeyFrame::HammingDis(const BRIEF::bitset &a, const BRIEF::bitset &b)
 {

@@ -2,9 +2,9 @@
 
 PoseGraph::PoseGraph()
 {
-    posegraph_visualization = new CameraPoseVisualization(1.0, 0.0, 1.0, 1.0);
-    posegraph_visualization->setScale(0.1);
-    posegraph_visualization->setLineWidth(0.01);
+    // posegraph_visualization = new CameraPoseVisualization(1.0, 0.0, 1.0, 1.0);
+    // posegraph_visualization->setScale(0.1);
+    // posegraph_visualization->setLineWidth(0.01);
 	t_optimization = std::thread(&PoseGraph::optimize4DoF, this);
     earliest_loop_index = -1;
     t_drift = Eigen::Vector3d(0, 0, 0);
@@ -24,14 +24,14 @@ PoseGraph::~PoseGraph()
 	t_optimization.join();
 }
 
-void PoseGraph::registerPub(ros::NodeHandle &n)
-{
-    pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
-    pub_base_path = n.advertise<nav_msgs::Path>("base_path", 1000);
-    pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
-    for (int i = 1; i < 10; i++)
-        pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
-}
+// void PoseGraph::registerPub(ros::NodeHandle &n)
+// {
+    // pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
+    // pub_base_path = n.advertise<nav_msgs::Path>("base_path", 1000);
+    // pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
+    // for (int i = 1; i < 10; i++)
+    //     pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
+// }
 
 void PoseGraph::loadVocabulary(std::string voc_path)
 {
@@ -79,6 +79,9 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
 
         if (cur_kf->findConnection(old_kf))
         {
+            if (on_keyframe_connection_found_cb_) {
+                on_keyframe_connection_found_cb_(cur_kf->getThumbImage(), cur_kf->time_stamp);
+            }
             if (earliest_loop_index > loop_index || earliest_loop_index == -1)
                 earliest_loop_index = loop_index;
 
@@ -148,23 +151,23 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     // path[sequence_cnt].poses.push_back(pose_stamped);
     // path[sequence_cnt].header = pose_stamped.header;
 
-    if (SAVE_LOOP_PATH)
-    {
-        ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
-        loop_path_file.setf(ios::fixed, ios::floatfield);
-        loop_path_file.precision(0);
-        loop_path_file << cur_kf->time_stamp * 1e9 << ",";
-        loop_path_file.precision(5);
-        loop_path_file  << P.x() << ","
-              << P.y() << ","
-              << P.z() << ","
-              << Q.w() << ","
-              << Q.x() << ","
-              << Q.y() << ","
-              << Q.z() << ","
-              << endl;
-        loop_path_file.close();
-    }
+    // if (SAVE_LOOP_PATH)
+    // {
+    //     ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+    //     loop_path_file.setf(ios::fixed, ios::floatfield);
+    //     loop_path_file.precision(0);
+    //     loop_path_file << cur_kf->time_stamp * 1e9 << ",";
+    //     loop_path_file.precision(5);
+    //     loop_path_file  << P.x() << ","
+    //           << P.y() << ","
+    //           << P.z() << ","
+    //           << Q.w() << ","
+    //           << Q.x() << ","
+    //           << Q.y() << ","
+    //           << Q.z() << ","
+    //           << endl;
+    //     loop_path_file.close();
+    // }
     //draw local connection
     if (SHOW_S_EDGE)
     {
@@ -173,12 +176,15 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
         {
             if (rit == keyframelist.rend())
                 break;
-            Vector3d conncected_P;
+            Vector3d connected_P;
             Matrix3d connected_R;
             if((*rit)->sequence == cur_kf->sequence)
             {
-                (*rit)->getPose(conncected_P, connected_R);
-                posegraph_visualization->add_edge(P, conncected_P);
+                (*rit)->getPose(connected_P, connected_R);
+                if (on_new_edge_cb_) {
+                    on_new_edge_cb_(P, connected_P);
+                }
+                // posegraph_visualization->add_edge(P, connected_P);
             }
             rit++;
         }
@@ -197,7 +203,10 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
             if(cur_kf->sequence > 0)
             {
                 //printf("add loop into visual \n");
-                posegraph_visualization->add_loopedge(P0, connected_P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
+                if (on_new_loopedge_cb_) {
+                    on_new_loopedge_cb_(P0, connected_P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
+                }
+                // posegraph_visualization->add_loopedge(P0, connected_P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
             }
 
         }
@@ -227,6 +236,9 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
         KeyFrame* old_kf = getKeyFrame(loop_index);
         if (cur_kf->findConnection(old_kf))
         {
+            if (on_keyframe_connection_found_cb_) {
+                on_keyframe_connection_found_cb_(cur_kf->getThumbImage(), cur_kf->time_stamp);
+            }
             if (earliest_loop_index > loop_index || earliest_loop_index == -1)
                 earliest_loop_index = loop_index;
             m_optimize_buf.lock();
@@ -238,19 +250,19 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     Vector3d P;
     Matrix3d R;
     cur_kf->getPose(P, R);
-    Quaterniond Q{R};
-    geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
-    pose_stamped.header.frame_id = "world";
-    pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-    pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-    pose_stamped.pose.position.z = P.z();
-    pose_stamped.pose.orientation.x = Q.x();
-    pose_stamped.pose.orientation.y = Q.y();
-    pose_stamped.pose.orientation.z = Q.z();
-    pose_stamped.pose.orientation.w = Q.w();
-    base_path.poses.push_back(pose_stamped);
-    base_path.header = pose_stamped.header;
+    // Quaterniond Q{R};
+    // geometry_msgs::PoseStamped pose_stamped;
+    // pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
+    // pose_stamped.header.frame_id = "world";
+    // pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
+    // pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
+    // pose_stamped.pose.position.z = P.z();
+    // pose_stamped.pose.orientation.x = Q.x();
+    // pose_stamped.pose.orientation.y = Q.y();
+    // pose_stamped.pose.orientation.z = Q.z();
+    // pose_stamped.pose.orientation.w = Q.w();
+    // base_path.poses.push_back(pose_stamped);
+    // base_path.header = pose_stamped.header;
 
     //draw local connection
     if (SHOW_S_EDGE)
@@ -260,12 +272,15 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
         {
             if (rit == keyframelist.rend())
                 break;
-            Vector3d conncected_P;
+            Vector3d connected_P;
             Matrix3d connected_R;
             if((*rit)->sequence == cur_kf->sequence)
             {
-                (*rit)->getPose(conncected_P, connected_R);
-                posegraph_visualization->add_edge(P, conncected_P);
+                (*rit)->getPose(connected_P, connected_R);
+                if (on_new_edge_cb_) {
+                    on_new_edge_cb_(P, connected_P);
+                }
+                // posegraph_visualization->add_edge(P, connected_P);
             }
             rit++;
         }
@@ -574,8 +589,11 @@ void PoseGraph::optimize4DoF()
                 R = r_drift * R;
                 (*it)->updatePose(P, R);
             }
+            // updatePath();
+            if (on_optimization_step_completed_cb_) {
+                on_optimization_step_completed_cb_(keyframelist);
+            }
             m_keyframelist.unlock();
-            updatePath();
         }
 
         std::chrono::milliseconds dura(2000);
@@ -583,121 +601,120 @@ void PoseGraph::optimize4DoF()
     }
 }
 
-void PoseGraph::updatePath()
-{
-    m_keyframelist.lock();
-    list<KeyFrame*>::iterator it;
-    for (int i = 1; i <= sequence_cnt; i++)
-    {
-        path[i].poses.clear();
-    }
-    base_path.poses.clear();
-    posegraph_visualization->reset();
+// void PoseGraph::updatePath()
+// {
+//     m_keyframelist.lock();
+    // list<KeyFrame*>::iterator it;
+    // for (int i = 1; i <= sequence_cnt; i++)
+    // {
+    //     path[i].poses.clear();
+    // }
+    // base_path.poses.clear();
+    // posegraph_visualization->reset();
 
-    if (SAVE_LOOP_PATH)
-    {
-        ofstream loop_path_file_tmp(VINS_RESULT_PATH, ios::out);
-        loop_path_file_tmp.close();
-    }
+    // if (SAVE_LOOP_PATH)
+    // {
+    //     ofstream loop_path_file_tmp(VINS_RESULT_PATH, ios::out);
+    //     loop_path_file_tmp.close();
+    // }
 
-    for (it = keyframelist.begin(); it != keyframelist.end(); it++)
-    {
-        Vector3d P;
-        Matrix3d R;
-        (*it)->getPose(P, R);
-        Quaterniond Q;
-        Q = R;
-//        printf("path p: %f, %f, %f\n",  P.x(),  P.z(),  P.y() );
+    // for (it = keyframelist.begin(); it != keyframelist.end(); it++)
+    // {
+        // Vector3d P;
+        // Matrix3d R;
+        // (*it)->getPose(P, R);
+//         Quaterniond Q;
+//         Q = R;
+// //        printf("path p: %f, %f, %f\n",  P.x(),  P.z(),  P.y() );
 
-        geometry_msgs::PoseStamped pose_stamped;
-        pose_stamped.header.stamp = ros::Time((*it)->time_stamp);
-        pose_stamped.header.frame_id = "world";
-        pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-        pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-        pose_stamped.pose.position.z = P.z();
-        pose_stamped.pose.orientation.x = Q.x();
-        pose_stamped.pose.orientation.y = Q.y();
-        pose_stamped.pose.orientation.z = Q.z();
-        pose_stamped.pose.orientation.w = Q.w();
-        if((*it)->sequence == 0)
-        {
-            base_path.poses.push_back(pose_stamped);
-            base_path.header = pose_stamped.header;
-        }
-        else
-        {
-            path[(*it)->sequence].poses.push_back(pose_stamped);
-            path[(*it)->sequence].header = pose_stamped.header;
-        }
+//         geometry_msgs::PoseStamped pose_stamped;
+//         pose_stamped.header.stamp = ros::Time((*it)->time_stamp);
+//         pose_stamped.header.frame_id = "world";
+//         pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
+//         pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
+//         pose_stamped.pose.position.z = P.z();
+//         pose_stamped.pose.orientation.x = Q.x();
+//         pose_stamped.pose.orientation.y = Q.y();
+//         pose_stamped.pose.orientation.z = Q.z();
+//         pose_stamped.pose.orientation.w = Q.w();
+//         if((*it)->sequence == 0)
+//         {
+//             base_path.poses.push_back(pose_stamped);
+//             base_path.header = pose_stamped.header;
+//         }
+//         else
+//         {
+//             path[(*it)->sequence].poses.push_back(pose_stamped);
+//             path[(*it)->sequence].header = pose_stamped.header;
+//         }
 
-        if (SAVE_LOOP_PATH)
-        {
-            ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
-            loop_path_file.setf(ios::fixed, ios::floatfield);
-            loop_path_file.precision(0);
-            loop_path_file << (*it)->time_stamp * 1e9 << ",";
-            loop_path_file.precision(5);
-            loop_path_file  << P.x() << ","
-                  << P.y() << ","
-                  << P.z() << ","
-                  << Q.w() << ","
-                  << Q.x() << ","
-                  << Q.y() << ","
-                  << Q.z() << ","
-                  << endl;
-            loop_path_file.close();
-        }
+//         if (SAVE_LOOP_PATH)
+//         {
+//             ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+//             loop_path_file.setf(ios::fixed, ios::floatfield);
+//             loop_path_file.precision(0);
+//             loop_path_file << (*it)->time_stamp * 1e9 << ",";
+//             loop_path_file.precision(5);
+//             loop_path_file  << P.x() << ","
+//                   << P.y() << ","
+//                   << P.z() << ","
+//                   << Q.w() << ","
+//                   << Q.x() << ","
+//                   << Q.y() << ","
+//                   << Q.z() << ","
+//                   << endl;
+//             loop_path_file.close();
+//         }
         //draw local connection
-        if (SHOW_S_EDGE)
-        {
-            list<KeyFrame*>::reverse_iterator rit = keyframelist.rbegin();
-            list<KeyFrame*>::reverse_iterator lrit;
-            for (; rit != keyframelist.rend(); rit++)
-            {
-                if ((*rit)->index == (*it)->index)
-                {
-                    lrit = rit;
-                    lrit++;
-                    for (int i = 0; i < 4; i++)
-                    {
-                        if (lrit == keyframelist.rend())
-                            break;
-                        if((*lrit)->sequence == (*it)->sequence)
-                        {
-                            Vector3d conncected_P;
-                            Matrix3d connected_R;
-                            (*lrit)->getPose(conncected_P, connected_R);
-                            posegraph_visualization->add_edge(P, conncected_P);
-                        }
-                        lrit++;
-                    }
-                    break;
-                }
-            }
-        }
-        if (SHOW_L_EDGE)
-        {
-            if ((*it)->has_loop && (*it)->sequence == sequence_cnt)
-            {
+        // if (SHOW_S_EDGE)
+        // {
+        //     list<KeyFrame*>::reverse_iterator rit = keyframelist.rbegin();
+        //     list<KeyFrame*>::reverse_iterator lrit;
+        //     for (; rit != keyframelist.rend(); rit++)
+        //     {
+        //         if ((*rit)->index == (*it)->index)
+        //         {
+        //             lrit = rit;
+        //             lrit++;
+        //             for (int i = 0; i < 4; i++)
+        //             {
+        //                 if (lrit == keyframelist.rend())
+        //                     break;
+        //                 if((*lrit)->sequence == (*it)->sequence)
+        //                 {
+        //                     Vector3d conncected_P;
+        //                     Matrix3d connected_R;
+        //                     (*lrit)->getPose(conncected_P, connected_R);
+        //                     posegraph_visualization->add_edge(P, conncected_P);
+        //                 }
+        //                 lrit++;
+        //             }
+        //             break;
+        //         }
+        //     }
+        // }
+        // if (SHOW_L_EDGE)
+        // {
+        //     if ((*it)->has_loop && (*it)->sequence == sequence_cnt)
+        //     {
 
-                KeyFrame* connected_KF = getKeyFrame((*it)->loop_index);
-                Vector3d connected_P;
-                Matrix3d connected_R;
-                connected_KF->getPose(connected_P, connected_R);
-                //(*it)->getVioPose(P, R);
-                (*it)->getPose(P, R);
-                if((*it)->sequence > 0)
-                {
-                    posegraph_visualization->add_loopedge(P, connected_P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
-                }
-            }
-        }
+        //         KeyFrame* connected_KF = getKeyFrame((*it)->loop_index);
+        //         Vector3d connected_P;
+        //         Matrix3d connected_R;
+        //         connected_KF->getPose(connected_P, connected_R);
+        //         //(*it)->getVioPose(P, R);
+        //         (*it)->getPose(P, R);
+        //         if((*it)->sequence > 0)
+        //         {
+        //             posegraph_visualization->add_loopedge(P, connected_P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
+        //         }
+        //     }
+        // }
 
-    }
-    publish();
-    m_keyframelist.unlock();
-}
-
+    // }
+    // publish();
+//     m_keyframelist.unlock();
+// }
 
 void PoseGraph::savePoseGraph()
 {
@@ -863,15 +880,41 @@ void PoseGraph::loadPoseGraph()
 
         KeyFrame* keyframe = new KeyFrame(time_stamp, index, VIO_T, VIO_R, PG_T, PG_R, image, loop_index, loop_info, keypoints, keypoints_norm, brief_descriptors);
         loadKeyFrame(keyframe, 0);
-        if (cnt % 20 == 0)
-        {
-            publish();
+        
+        // on_keyframe_loaded callback function
+        if (on_keyframe_loaded_cb_) {
+            on_keyframe_loaded_cb_(keyframe, cnt);
         }
+
+        // if (cnt % 20 == 0)
+        // {
+        //     publish();
+        // }
         cnt++;
     }
     fclose (pFile);
     printf("load pose graph time: %f s\n", tmp_t.toc()/1000);
     base_sequence = 0;
+}
+
+void PoseGraph::setOnKeyFrameLoadedCallback(std::function<void(KeyFrame*, int)> on_keyframe_loaded_cb) {
+    on_keyframe_loaded_cb_ = on_keyframe_loaded_cb;
+}
+
+void PoseGraph::setOnOptimizationStepCompletedCallback(std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb) {
+    on_optimization_step_completed_cb_ = on_optimization_step_completed_cb;
+}
+
+void PoseGraph::setOnNewEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_edge_cb) {
+    on_new_edge_cb_ = on_new_edge_cb;
+}
+
+void PoseGraph::setOnNewLoopEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb) {
+    on_new_loopedge_cb_ = on_new_loopedge_cb;
+}
+
+void PoseGraph::setOnKeyFrameConnectionFoundCallback(std::function<void(cv::Mat, double)> on_keyframe_connection_found_cb) {
+    on_keyframe_connection_found_cb_ = on_keyframe_connection_found_cb;
 }
 
 // void PoseGraph::publish()

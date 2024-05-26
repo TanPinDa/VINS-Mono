@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <vector>
 #include <eigen3/Eigen/Dense>
 #include <opencv2/opencv.hpp>
@@ -38,6 +39,7 @@ public:
 			 cv::Mat &_image, int _loop_index, Eigen::Matrix<double, 8, 1 > &_loop_info,
 			 vector<cv::KeyPoint> &_keypoints, vector<cv::KeyPoint> &_keypoints_norm, vector<BRIEF::bitset> &_brief_descriptors);
 	bool findConnection(KeyFrame* old_kf);
+	cv::Mat getThumbImage();
 	void computeWindowBRIEFPoint();
 	void computeBRIEFPoint();
 	//void extractBrief();
@@ -99,5 +101,9 @@ public:
 	bool has_loop;
 	int loop_index;
 	Eigen::Matrix<double, 8, 1 > loop_info;
+
+	private:
+	cv::Mat thumbimage_;
+	std::mutex m_thumbimage_;
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
@@ -13,7 +14,7 @@
 extern camodocal::CameraPtr m_camera;
 extern Eigen::Vector3d tic;
 extern Eigen::Matrix3d qic;
-extern ros::Publisher pub_match_img;
+// extern ros::Publisher pub_match_img;
 extern ros::Publisher pub_match_points;
 extern int VISUALIZATION_SHIFT_X;
 extern int VISUALIZATION_SHIFT_Y;
