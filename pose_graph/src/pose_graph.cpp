@@ -134,19 +134,19 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     P = r_drift * P + t_drift;
     R = r_drift * R;
     cur_kf->updatePose(P, R);
-    Quaterniond Q{R};
-    geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
-    pose_stamped.header.frame_id = "world";
-    pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-    pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-    pose_stamped.pose.position.z = P.z();
-    pose_stamped.pose.orientation.x = Q.x();
-    pose_stamped.pose.orientation.y = Q.y();
-    pose_stamped.pose.orientation.z = Q.z();
-    pose_stamped.pose.orientation.w = Q.w();
-    path[sequence_cnt].poses.push_back(pose_stamped);
-    path[sequence_cnt].header = pose_stamped.header;
+    // Quaterniond Q{R};
+    // geometry_msgs::PoseStamped pose_stamped;
+    // pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
+    // pose_stamped.header.frame_id = "world";
+    // pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
+    // pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
+    // pose_stamped.pose.position.z = P.z();
+    // pose_stamped.pose.orientation.x = Q.x();
+    // pose_stamped.pose.orientation.y = Q.y();
+    // pose_stamped.pose.orientation.z = Q.z();
+    // pose_stamped.pose.orientation.w = Q.w();
+    // path[sequence_cnt].poses.push_back(pose_stamped);
+    // path[sequence_cnt].header = pose_stamped.header;
 
     if (SAVE_LOOP_PATH)
     {
@@ -205,7 +205,7 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     //posegraph_visualization->add_pose(P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0), Q);
 
 	keyframelist.push_back(cur_kf);
-    publish();
+    // publish();
 	m_keyframelist.unlock();
 }
 
@@ -299,6 +299,11 @@ KeyFrame* PoseGraph::getKeyFrame(int index)
         return *it;
     else
         return NULL;
+}
+
+int PoseGraph::getCurrentSequenceCount()
+{
+    return sequence_cnt;
 }
 
 int PoseGraph::detectLoop(KeyFrame* keyframe, int frame_index)
@@ -869,22 +874,22 @@ void PoseGraph::loadPoseGraph()
     base_sequence = 0;
 }
 
-void PoseGraph::publish()
-{
-    for (int i = 1; i <= sequence_cnt; i++)
-    {
-        //if (sequence_loop[i] == true || i == base_sequence)
-        if (1 || i == base_sequence)
-        {
-            pub_pg_path.publish(path[i]);
-            pub_path[i].publish(path[i]);
-            posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
-        }
-    }
-    base_path.header.frame_id = "world";
-    pub_base_path.publish(base_path);
-    //posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
-}
+// void PoseGraph::publish()
+// {
+//     for (int i = 1; i <= sequence_cnt; i++)
+//     {
+//         //if (sequence_loop[i] == true || i == base_sequence)
+//         if (1 || i == base_sequence)
+//         {
+//             pub_pg_path.publish(path[i]);
+//             pub_path[i].publish(path[i]);
+//             posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
+//         }
+//     }
+//     base_path.header.frame_id = "world";
+//     pub_base_path.publish(base_path);
+//     //posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
+// }
 
 void PoseGraph::updateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1 > &_loop_info)
 {

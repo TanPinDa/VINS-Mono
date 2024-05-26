@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <thread>
 #include <mutex>
 #include <opencv2/opencv.hpp>
@@ -42,6 +43,7 @@ public:
 	void loadVocabulary(std::string voc_path);
 	void updateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1 > &_loop_info);
 	KeyFrame* getKeyFrame(int index);
+	int getCurrentSequenceCount();
 	nav_msgs::Path path[10];
 	nav_msgs::Path base_path;
 	CameraPoseVisualization* posegraph_visualization;
@@ -70,7 +72,7 @@ private:
 	std::queue<int> optimize_buf;
 
 	int global_index;
-	int sequence_cnt;
+	std::atomic<int> sequence_cnt;
 	vector<bool> sequence_loop;
 	map<int, cv::Mat> image_pool;
 	int earliest_loop_index;
@@ -79,10 +81,10 @@ private:
 	BriefDatabase db;
 	BriefVocabulary* voc;
 
-	ros::Publisher pub_pg_path;
-	ros::Publisher pub_base_path;
+	// ros::Publisher pub_pg_path;
+	// ros::Publisher pub_base_path;
 	ros::Publisher pub_pose_graph;
-	ros::Publisher pub_path[10];
+	// ros::Publisher pub_path[10];
 };
 
 template <typename T>

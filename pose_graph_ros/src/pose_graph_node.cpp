@@ -2,6 +2,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <geometry_msgs/PointStamped.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -41,6 +42,8 @@ int skip_cnt = 0;
 bool load_flag = 0;
 bool start_flag = 0;
 double SKIP_DIS = 0;
+nav_msgs::Path path[10];
+nav_msgs::Path base_path;
 
 int VISUALIZATION_SHIFT_X;
 int VISUALIZATION_SHIFT_Y;
@@ -59,6 +62,9 @@ ros::Publisher pub_match_points;
 ros::Publisher pub_camera_pose_visual;
 ros::Publisher pub_key_odometrys;
 ros::Publisher pub_vio_path;
+ros::Publisher pub_pg_path;
+ros::Publisher pub_base_path;
+ros::Publisher pub_path[10];
 nav_msgs::Path no_loop_path;
 
 std::string BRIEF_PATTERN_FILE;
@@ -90,6 +96,23 @@ void new_sequence()
     while(!odometry_buf.empty())
         odometry_buf.pop();
     m_buf.unlock();
+}
+
+void publish(int sequence_cnt)
+{
+    for (int i = 1; i <= sequence_cnt; i++)
+    {
+        //if (sequence_loop[i] == true || i == base_sequence)
+        if (true)
+        {
+            pub_pg_path.publish(path[i]);
+            pub_path[i].publish(path[i]);
+            // TODO: move posegraph_visualization out of PoseGraph class
+            // posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
+        }
+    }
+    base_path.header.frame_id = "world";
+    pub_base_path.publish(base_path);
 }
 
 void image_callback(const sensor_msgs::ImageConstPtr &image_msg)
@@ -418,6 +441,26 @@ void process()
                 m_process.lock();
                 start_flag = 1;
                 posegraph.addKeyFrame(keyframe, 1);
+                {
+                    int sequence_cnt = posegraph.getCurrentSequenceCount();
+                    Vector3d P;
+                    Matrix3d R;
+                    keyframe->getPose(P, R);
+                    Quaterniond Q{R};
+                    geometry_msgs::PoseStamped pose_stamped;
+                    pose_stamped.header.stamp = ros::Time(keyframe->time_stamp);
+                    pose_stamped.header.frame_id = "world";
+                    pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
+                    pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
+                    pose_stamped.pose.position.z = P.z();
+                    pose_stamped.pose.orientation.x = Q.x();
+                    pose_stamped.pose.orientation.y = Q.y();
+                    pose_stamped.pose.orientation.z = Q.z();
+                    pose_stamped.pose.orientation.w = Q.w();
+                    path[sequence_cnt].poses.push_back(pose_stamped);
+                    path[sequence_cnt].header = pose_stamped.header;
+                }
+                publish(posegraph.getCurrentSequenceCount());
                 m_process.unlock();
                 frame_index++;
                 last_t = T;
@@ -541,6 +584,12 @@ int main(int argc, char **argv)
     pub_key_odometrys = n.advertise<visualization_msgs::Marker>("key_odometrys", 1000);
     pub_vio_path = n.advertise<nav_msgs::Path>("no_loop_path", 1000);
     pub_match_points = n.advertise<sensor_msgs::PointCloud>("match_points", 100);
+    pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
+    pub_base_path = n.advertise<nav_msgs::Path>("base_path", 1000);
+    // TODO: move posegraph_visualization out of PoseGraph class
+    // pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
+    for (int i = 1; i < 10; i++)
+        pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
 
     std::thread measurement_process;
     std::thread keyboard_command_process;
