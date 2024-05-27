@@ -1,7 +1,7 @@
 #include "pose_graph/keyframe.h"
 
-#include "ThirdParty/DBoW/DBoW2.h"
-#include "ThirdParty/DVision/DVision.h"
+#include "DBoW/DBoW2.h"
+#include "DVision.h"
 
 template <typename Derived>
 static void reduceVector(vector<Derived> &v, vector<uchar> status)

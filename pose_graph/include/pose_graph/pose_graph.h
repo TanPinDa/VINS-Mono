@@ -19,10 +19,10 @@
 #include "keyframe.h"
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
-#include "DBoW2.h"
+#include "DBoW/DBoW2.h"
 #include "DVision.h"
-#include "TemplatedDatabase.h"
-#include "TemplatedVocabulary.h"
+#include "DBoW/TemplatedDatabase.h"
+#include "DBoW/TemplatedVocabulary.h"
 
 
 #define SHOW_S_EDGE false

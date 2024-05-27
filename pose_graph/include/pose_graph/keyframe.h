@@ -11,7 +11,7 @@
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
 #include "parameters.h"
-#include "FBrief.h"
+#include "DBoW/FBrief.h"
 
 #define MIN_LOOP_NUM 25
 
