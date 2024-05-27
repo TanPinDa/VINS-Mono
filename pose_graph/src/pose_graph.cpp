@@ -76,11 +76,12 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
 	{
         //printf(" %d detect loop with %d \n", cur_kf->index, loop_index);
         KeyFrame* old_kf = getKeyFrame(loop_index);
-
-        if (cur_kf->findConnection(old_kf))
+        shared_ptr<vector<cv::Point2f>> matched_2d_old_norm_ptr = make_shared<vector<cv::Point2f>>();
+        shared_ptr<vector<double>> matched_id_ptr = make_shared<vector<double>>();
+        if (cur_kf->findConnection(old_kf, matched_2d_old_norm_ptr, matched_id_ptr))
         {
             if (on_keyframe_connection_found_cb_) {
-                on_keyframe_connection_found_cb_(cur_kf->getThumbImage(), cur_kf->time_stamp);
+                on_keyframe_connection_found_cb_(cur_kf, old_kf, matched_2d_old_norm_ptr, matched_id_ptr);
             }
             if (earliest_loop_index > loop_index || earliest_loop_index == -1)
                 earliest_loop_index = loop_index;
@@ -234,10 +235,13 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     {
         printf(" %d detect loop with %d \n", cur_kf->index, loop_index);
         KeyFrame* old_kf = getKeyFrame(loop_index);
-        if (cur_kf->findConnection(old_kf))
+        shared_ptr<vector<cv::Point2f>> matched_2d_old_norm_ptr = make_shared<vector<cv::Point2f>>();
+        shared_ptr<vector<double>> matched_id_ptr = make_shared<vector<double>>();
+        if (cur_kf->findConnection(old_kf, matched_2d_old_norm_ptr, matched_id_ptr))
         {
+            // on_connection_matched_points_
             if (on_keyframe_connection_found_cb_) {
-                on_keyframe_connection_found_cb_(cur_kf->getThumbImage(), cur_kf->time_stamp);
+                on_keyframe_connection_found_cb_(cur_kf, old_kf, matched_2d_old_norm_ptr, matched_id_ptr);
             }
             if (earliest_loop_index > loop_index || earliest_loop_index == -1)
                 earliest_loop_index = loop_index;
@@ -913,7 +917,7 @@ void PoseGraph::setOnNewLoopEdgeCallback(std::function<void(Vector3d, Vector3d)>
     on_new_loopedge_cb_ = on_new_loopedge_cb;
 }
 
-void PoseGraph::setOnKeyFrameConnectionFoundCallback(std::function<void(cv::Mat, double)> on_keyframe_connection_found_cb) {
+void PoseGraph::setOnKeyFrameConnectionFoundCallback(std::function<void(KeyFrame*, KeyFrame*, shared_ptr<vector<cv::Point2f>>, shared_ptr<vector<double>>)> on_keyframe_connection_found_cb) {
     on_keyframe_connection_found_cb_ = on_keyframe_connection_found_cb;
 }
 

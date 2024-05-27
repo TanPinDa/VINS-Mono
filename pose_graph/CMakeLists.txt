@@ -11,13 +11,6 @@ find_package(Ceres REQUIRED)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Eigen3)
-find_package(catkin REQUIRED COMPONENTS
-    roscpp
-    std_msgs
-    nav_msgs
-    cv_bridge
-    roslib
-    )
 
 add_subdirectory(src/ThirdParty)
 
@@ -26,19 +19,16 @@ add_library(pose_graph STATIC
     src/keyframe.cpp
     )
 target_link_libraries(pose_graph PUBLIC
+    ${OpenCV_LIBS}
+    PRIVATE 
     DBoW
     DUtils
     DVision
     VocabularyBinary
-    ${OpenCV_LIBS}
-    PRIVATE 
-    ${catkin_LIBRARIES}
     Ceres::ceres
     )
 target_include_directories(pose_graph PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
     ${OpenCV_INCLUDE_DIRS}
-    ${catkin_INCLUDE_DIRS}
     )
-# message("catkin_lib  ${catkin_LIBRARIES}")

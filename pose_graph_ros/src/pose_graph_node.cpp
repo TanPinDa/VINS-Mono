@@ -268,11 +268,41 @@ void on_new_loopedge_callback(Vector3d p1, Vector3d p2)
     posegraph_visualization->add_loopedge(p1, p2);
 }
 
-void on_keyframe_connection_found_callback(cv::Mat img, double time_stamp)
+void on_keyframe_connection_found_callback(KeyFrame* cur_kf, KeyFrame* old_kf, shared_ptr<vector<cv::Point2f>> matched_2d_old_norm_ptr, shared_ptr<vector<double>> matched_id_ptr)
 {
-    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
-	                msg->header.stamp = ros::Time(time_stamp);
-    pub_match_img.publish(msg);
+    {
+        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cur_kf->getThumbImage()).toImageMsg();
+                        msg->header.stamp = ros::Time(cur_kf->time_stamp);
+        pub_match_img.publish(msg);
+    }
+    if (FAST_RELOCALIZATION) {
+        vector<cv::Point2f>& matched_2d_old_norm = *matched_2d_old_norm_ptr;
+        vector<double>& matched_id = *matched_id_ptr;
+        sensor_msgs::PointCloud msg_match_points;
+        msg_match_points.header.stamp = ros::Time(cur_kf->time_stamp);
+        for (int i = 0; i < (int)matched_2d_old_norm.size(); i++)
+        {
+            geometry_msgs::Point32 p;
+            p.x = matched_2d_old_norm[i].x;
+            p.y = matched_2d_old_norm[i].y;
+            p.z = matched_id[i];
+            msg_match_points.points.push_back(p);
+        }
+        Eigen::Vector3d T = old_kf->T_w_i;
+        Eigen::Matrix3d R = old_kf->R_w_i;
+        Quaterniond Q(R);
+        sensor_msgs::ChannelFloat32 t_q_index;
+        t_q_index.values.push_back(T.x());
+        t_q_index.values.push_back(T.y());
+        t_q_index.values.push_back(T.z());
+        t_q_index.values.push_back(Q.w());
+        t_q_index.values.push_back(Q.x());
+        t_q_index.values.push_back(Q.y());
+        t_q_index.values.push_back(Q.z());
+        t_q_index.values.push_back(cur_kf->index);
+        msg_match_points.channels.push_back(t_q_index);
+        pub_match_points.publish(msg_match_points);
+    }
 }
 
 void image_callback(const sensor_msgs::ImageConstPtr &image_msg)
@@ -683,6 +713,7 @@ int main(int argc, char **argv)
     posegraph.setOnOptimizationStepCompletedCallback(on_optimization_step_completed_callback);
     posegraph.setOnNewEdgeCallback(on_new_edge_callback);
     posegraph.setOnNewLoopEdgeCallback(on_new_loopedge_callback);
+    posegraph.setOnKeyFrameConnectionFoundCallback(on_keyframe_connection_found_callback);
     posegraph_visualization = new CameraPoseVisualization(1.0, 0.0, 1.0, 1.0);
     posegraph_visualization->setScale(0.1);
     posegraph_visualization->setLineWidth(0.01);

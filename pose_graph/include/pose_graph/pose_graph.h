@@ -1,21 +1,24 @@
 #pragma once
 
 #include <atomic>
+#include <assert.h>
 #include <functional>
-#include <thread>
 #include <mutex>
-#include <opencv2/opencv.hpp>
-#include <eigen3/Eigen/Dense>
+#include <queue>
+#include <stdio.h>
 #include <string>
+#include <thread>
+#include <vector>
+#include <memory>
+
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
-#include <queue>
-#include <assert.h>
-#include <stdio.h>
+#include <eigen3/Eigen/Dense>
+#include <opencv2/opencv.hpp>
+
 #include "keyframe.h"
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
-#include "utility/tic_toc.h"
 #include "DBoW2.h"
 #include "DVision.h"
 #include "TemplatedDatabase.h"
@@ -46,7 +49,7 @@ public:
 	void setOnOptimizationStepCompletedCallback(std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb);
 	void setOnNewEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_edge_cb);
 	void setOnNewLoopEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb);
-	void setOnKeyFrameConnectionFoundCallback(std::function<void(cv::Mat, double)> on_keyframe_connection_found_cb);
+	void setOnKeyFrameConnectionFoundCallback(std::function<void(KeyFrame*, KeyFrame*, shared_ptr<vector<cv::Point2f>>, shared_ptr<vector<double>>)> on_keyframe_connection_found_cb);
 	Vector3d t_drift;
 	double yaw_drift;
 	Matrix3d r_drift;
@@ -83,7 +86,7 @@ private:
 	std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb_;
 	std::function<void(Vector3d, Vector3d)> on_new_edge_cb_;
 	std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb_;
-	std::function<void(cv::Mat, double)> on_keyframe_connection_found_cb_;
+	std::function<void(KeyFrame*, KeyFrame*, shared_ptr<vector<cv::Point2f>>, shared_ptr<vector<double>>)> on_keyframe_connection_found_cb_;
 };
 
 template <typename T>
