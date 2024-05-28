@@ -11,6 +11,8 @@
 #include "estimator.h"
 #include "parameters_ros.h"
 #include "utility/visualization.h"
+#include <memory>
+
 
 Estimator estimator;
 
@@ -42,6 +44,8 @@ Eigen::Vector3d angular_velocity_previous;
 bool init_feature = 0;
 bool init_imu = 1;
 double last_imu_t = 0;
+// Will be a class varaible
+std::unique_ptr<EstimatorPublisher> estimator_publisher;
 
 void updateCurrentOrientation(const Eigen::Vector3d &imu_angular_velocity_current,
                               const Eigen::Vector3d &imu_angular_velocity_previous,
@@ -104,8 +108,8 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
         imu_msg->linear_acceleration.z};
 
     angular_velocity_current = {imu_msg->angular_velocity.x,
-                                        imu_msg->angular_velocity.y,
-                                        imu_msg->angular_velocity.z};
+                                imu_msg->angular_velocity.y,
+                                imu_msg->angular_velocity.z};
 
 
 
@@ -201,7 +205,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
-            pubLatestOdometry(position_estimated_current, orientation_estimated_previous, linear_velocity_estimated_current, header);
+            estimator_publisher->pubLatestOdometry(position_estimated_current, orientation_estimated_previous, linear_velocity_estimated_current, header);
     }
 }
 
@@ -358,19 +362,19 @@ void process()
             estimator.processImage(image, img_msg->header.stamp.toSec());
 
             double whole_t = t_s.toc();
-            printStatistics(estimator, whole_t);
+            estimator_publisher->printStatistics(estimator, whole_t);
             std_msgs::Header header = img_msg->header;
             header.frame_id = "world";
 
-            pubOdometry(estimator, header);
-            pubKeyPoses(estimator, header);
-            pubCameraPose(estimator, header);
-            pubPointCloud(estimator, header);
-            pubTF(estimator, header);
-            pubKeyframe(estimator);
+            estimator_publisher->pubOdometry(estimator, header);
+            estimator_publisher->pubKeyPoses(estimator, header);
+            estimator_publisher->pubCameraPose(estimator, header);
+            estimator_publisher->pubPointCloud(estimator, header);
+            estimator_publisher->pubTF(estimator, header);
+            estimator_publisher->pubKeyframe(estimator);
             if (relo_msg != NULL)
-                pubRelocalization(estimator);
-            //ROS_ERROR("end: %f, at %f", img_msg->header.stamp.toSec(), ros::Time::now().toSec());
+                estimator_publisher->pubRelocalization(estimator);
+            // ROS_ERROR("end: %f, at %f", img_msg->header.stamp.toSec(), ros::Time::now().toSec());
         }
         m_estimator.unlock();
         m_buf.lock();
@@ -394,7 +398,7 @@ int main(int argc, char **argv)
 #endif
     ROS_WARN("waiting for image and imu...");
 
-    registerPub(n);
+    estimator_publisher =  std::make_unique<EstimatorPublisher>(n);
 
     ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);

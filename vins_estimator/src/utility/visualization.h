@@ -18,35 +18,47 @@
 #include "../estimator.h"
 #include "../parameters.h"
 #include <fstream>
+#include <memory>
 
-extern ros::Publisher pub_odometry;
-extern ros::Publisher pub_path, pub_pose;
-extern ros::Publisher pub_cloud, pub_map;
-extern ros::Publisher pub_key_poses;
-extern ros::Publisher pub_ref_pose, pub_cur_pose;
-extern ros::Publisher pub_key;
-extern nav_msgs::Path path;
-extern ros::Publisher pub_pose_graph;
-extern int IMAGE_ROW, IMAGE_COL;
+class EstimatorPublisher
+{
+public:
+    EstimatorPublisher(ros::NodeHandle &n);
+    void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const std_msgs::Header &header);
 
-void registerPub(ros::NodeHandle &n);
+    void printStatistics(const Estimator &estimator, double t);
 
-void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const std_msgs::Header &header);
+    void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
 
-void printStatistics(const Estimator &estimator, double t);
+    void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
 
-void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
+    void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
 
-void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
+    void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
 
-void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
+    void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
 
-void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
+    void pubTF(const Estimator &estimator, const std_msgs::Header &header);
 
-void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
+    void pubKeyframe(const Estimator &estimator);
 
-void pubTF(const Estimator &estimator, const std_msgs::Header &header);
+    void pubRelocalization(const Estimator &estimator);
 
-void pubKeyframe(const Estimator &estimator);
+private:
+    CameraPoseVisualization cameraposevisual;
+    CameraPoseVisualization keyframebasevisual;
+    ros::Publisher pub_odometry, pub_latest_odometry;
+    ros::Publisher pub_path, pub_relo_path;
+    ros::Publisher pub_point_cloud, pub_margin_cloud;
+    ros::Publisher pub_key_poses;
+    ros::Publisher pub_relo_relative_pose;
+    ros::Publisher pub_camera_pose;
+    ros::Publisher pub_camera_pose_visual;
+    nav_msgs::Path path, relo_path;
+    ros::Publisher pub_keyframe_pose;
+    ros::Publisher pub_keyframe_point;
+    ros::Publisher pub_extrinsic;
+    double sum_of_path;
 
-void pubRelocalization(const Estimator &estimator);
+    Vector3d last_path;
+};
