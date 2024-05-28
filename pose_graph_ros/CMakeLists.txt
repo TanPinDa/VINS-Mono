@@ -15,12 +15,8 @@ find_package(catkin REQUIRED COMPONENTS
     )
 
 find_package(OpenCV)
-find_package(camodocal REQUIRED)
-
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+find_package(pose_graph REQUIRED)
 find_package(Eigen3)
-
-# include_directories( ${CERES_INCLUDE_DIRS}  ${EIGEN3_INCLUDE_DIR})
 
 catkin_package()
 
@@ -29,10 +25,9 @@ add_executable(pose_graph_node
     src/utility/CameraPoseVisualization.cpp
     )
 
-target_link_libraries(pose_graph_node pose_graph ${catkin_LIBRARIES} camodocal::camodocal)
+target_link_libraries(pose_graph_node pose_graph::pose_graph ${catkin_LIBRARIES})
 target_include_directories(pose_graph_node PUBLIC
     ${catkin_INCLUDE_DIRS}
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-# message("catkin_lib  ${catkin_LIBRARIES}")

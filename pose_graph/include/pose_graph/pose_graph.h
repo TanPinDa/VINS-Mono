@@ -49,7 +49,7 @@ public:
 	void setOnOptimizationStepCompletedCallback(std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb);
 	void setOnNewEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_edge_cb);
 	void setOnNewLoopEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb);
-	void setOnKeyFrameConnectionFoundCallback(std::function<void(KeyFrame*, KeyFrame*, shared_ptr<vector<cv::Point2f>>, shared_ptr<vector<double>>)> on_keyframe_connection_found_cb);
+	void setOnKeyFrameConnectionFoundCallback(std::function<void(KeyFrame*, KeyFrame*, vector<cv::Point2f>&, vector<double>&)> on_keyframe_connection_found_cb);
 	Vector3d t_drift;
 	double yaw_drift;
 	Matrix3d r_drift;
@@ -86,7 +86,7 @@ private:
 	std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb_;
 	std::function<void(Vector3d, Vector3d)> on_new_edge_cb_;
 	std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb_;
-	std::function<void(KeyFrame*, KeyFrame*, shared_ptr<vector<cv::Point2f>>, shared_ptr<vector<double>>)> on_keyframe_connection_found_cb_;
+	std::function<void(KeyFrame*, KeyFrame*, vector<cv::Point2f>&, vector<double>&)> on_keyframe_connection_found_cb_;
 };
 
 template <typename T>

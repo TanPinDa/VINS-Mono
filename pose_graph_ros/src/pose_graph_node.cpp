@@ -268,7 +268,7 @@ void on_new_loopedge_callback(Vector3d p1, Vector3d p2)
     posegraph_visualization->add_loopedge(p1, p2);
 }
 
-void on_keyframe_connection_found_callback(KeyFrame* cur_kf, KeyFrame* old_kf, shared_ptr<vector<cv::Point2f>> matched_2d_old_norm_ptr, shared_ptr<vector<double>> matched_id_ptr)
+void on_keyframe_connection_found_callback(KeyFrame* cur_kf, KeyFrame* old_kf, vector<cv::Point2f>& matched_2d_old_norm, vector<double>& matched_id)
 {
     {
         sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cur_kf->getThumbImage()).toImageMsg();
@@ -276,8 +276,6 @@ void on_keyframe_connection_found_callback(KeyFrame* cur_kf, KeyFrame* old_kf, s
         pub_match_img.publish(msg);
     }
     if (FAST_RELOCALIZATION) {
-        vector<cv::Point2f>& matched_2d_old_norm = *matched_2d_old_norm_ptr;
-        vector<double>& matched_id = *matched_id_ptr;
         sensor_msgs::PointCloud msg_match_points;
         msg_match_points.header.stamp = ros::Time(cur_kf->time_stamp);
         for (int i = 0; i < (int)matched_2d_old_norm.size(); i++)
@@ -706,7 +704,7 @@ void command()
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "pose_graph");
+    ros::init(argc, argv, "pose_graph_ros");
     ros::NodeHandle n("~");
     // posegraph.registerPub(n);
     posegraph.setOnKeyFrameLoadedCallback(on_keyframe_loaded_callback);
@@ -743,7 +741,7 @@ int main(int argc, char **argv)
     {
         ROW = fsSettings["image_height"];
         COL = fsSettings["image_width"];
-        std::string pkg_path = ros::package::getPath("pose_graph");
+        std::string pkg_path = ros::package::getPath("pose_graph_ros");
         string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";
         cout << "vocabulary_file" << vocabulary_file << endl;
         posegraph.loadVocabulary(vocabulary_file);
@@ -802,7 +800,6 @@ int main(int argc, char **argv)
     pub_match_points = n.advertise<sensor_msgs::PointCloud>("match_points", 100);
     pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
     pub_base_path = n.advertise<nav_msgs::Path>("base_path", 1000);
-    // TODO: move posegraph_visualization out of PoseGraph class
     pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
     for (int i = 1; i < 10; i++)
         pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);

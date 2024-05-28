@@ -41,7 +41,6 @@
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>camera_model</build_depend>
-  <build_depend>pose_graph</build_depend>
   <run_depend>camera_model</run_depend>
 
 
