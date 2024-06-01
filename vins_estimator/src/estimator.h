@@ -20,10 +20,9 @@
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 
-
 class Estimator
 {
-  public:
+public:
     Estimator();
 
     void setParameter();
@@ -47,7 +46,6 @@ class Estimator
     void double2vector();
     bool failureDetection();
 
-
     enum SolverFlag
     {
         INITIAL,
@@ -61,33 +59,20 @@ class Estimator
     };
 
     SolverFlag solver_flag;
-    MarginalizationFlag  marginalization_flag;
-    Vector3d g;
+    MarginalizationFlag marginalization_flag;
+
     MatrixXd Ap[2], backup_A;
     VectorXd bp[2], backup_b;
 
     Matrix3d ric[NUM_OF_CAM];
     Vector3d tic[NUM_OF_CAM];
 
-    Vector3d position[(WINDOW_SIZE + 1)];
-    Vector3d linear_velocity[(WINDOW_SIZE + 1)];
-    Matrix3d orientation[(WINDOW_SIZE + 1)];
-    Vector3d imu_linear_acceleration_bias[(WINDOW_SIZE + 1)];
-    Vector3d imu_angular_velocity_bias[(WINDOW_SIZE + 1)];
     double td;
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
 
-    // TODO consider using something like a queue or linked list 
-    double Timestamps[(WINDOW_SIZE + 1)];
-
-    IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
-    Vector3d linear_acceleration, angular_velocity;
-
-    vector<double> dt_buf[(WINDOW_SIZE + 1)];
-    vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
-    vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
+    // TODO consider using something like a queue or linked list
 
     int frame_count;
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
@@ -105,7 +90,6 @@ class Estimator
     vector<Vector3d> key_poses;
     double initial_timestamp;
 
-
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
@@ -122,7 +106,7 @@ class Estimator
     map<double, ImageFrame> all_image_frame;
     IntegrationBase *tmp_pre_integration;
 
-    //relocalization variable
+    // relocalization variable
     bool relocalization_info;
     double relo_frame_stamp;
     double relo_frame_index;
@@ -136,4 +120,34 @@ class Estimator
     Vector3d relo_relative_t;
     Quaterniond relo_relative_q;
     double relo_relative_yaw;
+
+
+
+    // Params
+
+    // const int window_size_;
+    // Raw Observations
+    vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
+    vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
+    Vector3d linear_acceleration, angular_velocity;
+    double Timestamps[(WINDOW_SIZE + 1)];
+
+    // Processed Obserrvations
+    vector<double> dt_buf[(WINDOW_SIZE + 1)];
+    IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
+
+    // State variables
+    Vector3d gravity_;
+    Vector3d positions_[(WINDOW_SIZE + 1)];
+    Matrix3d orientations_[(WINDOW_SIZE + 1)];
+    Vector3d linear_velocities_[(WINDOW_SIZE + 1)];
+
+    Vector3d imu_linear_acceleration_biases_[(WINDOW_SIZE + 1)];
+    Vector3d imu_angular_velocity_biases_[(WINDOW_SIZE + 1)];
+
+    void GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
+                                   Eigen::Quaterniond &out_orientation,
+                                   Eigen::Vector3d &out_linear_velocity,
+                                   Eigen::Vector3d &out_imu_linear_acceleration_bias,
+                                   Vector3d &out_imu_angular_velocity_bias );
 };

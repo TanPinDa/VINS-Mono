@@ -109,15 +109,13 @@ private:
                                     imu_msg->angular_velocity.y,
                                     imu_msg->angular_velocity.z};
 
-
-
     updateCurrentOrientation(angular_velocity_previous, angular_velocity_current, imu_angular_velocity_estimated_bias, orientation_estimated_previous, dt, orientation_estimated_current);
     updateCurrentPositionAndVelocity(linear_acceleration_previous,
                                      linear_acceleration_current,
                                      orientation_estimated_previous,
                                      orientation_estimated_current,
                                      imu_linear_acceleration_estimated_bias,
-                                     estimator.g,
+                                     estimator.gravity_,
                                      dt,
                                      position_estimated_current,
                                      linear_velocity_estimated_current);
@@ -127,11 +125,7 @@ private:
     {
         TicToc t_predict;
         latest_time = current_time;
-        position_estimated_current = estimator.position[WINDOW_SIZE];
-        orientation_estimated_current = estimator.orientation[WINDOW_SIZE];
-    linear_velocity_estimated_current = estimator.linear_velocity[WINDOW_SIZE];
-    imu_linear_acceleration_estimated_bias = estimator.imu_linear_acceleration_bias[WINDOW_SIZE];
-    imu_angular_velocity_estimated_bias = estimator.imu_angular_velocity_bias[WINDOW_SIZE];
+        estimator.GetLastestEstiamtedStates(position_estimated_current, orientation_estimated_current, linear_velocity_estimated_current, imu_linear_acceleration_estimated_bias, imu_angular_velocity_estimated_bias);
         linear_acceleration_current = estimator.linear_acceleration;
         angular_velocity_current = estimator.angular_velocity;
 
