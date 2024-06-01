@@ -152,7 +152,7 @@ public:
                                    Eigen::Quaterniond &out_orientation,
                                    Eigen::Vector3d &out_linear_velocity,
                                    Eigen::Vector3d &out_imu_linear_acceleration_bias,
-                                   Vector3d &out_imu_angular_velocity_bias) const;
+                                   Eigen::Vector3d &out_imu_angular_velocity_bias) const;
 
     void UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera_to_imu, Eigen::Matrix3d *out_rotation_camera_to_imu) const;
 

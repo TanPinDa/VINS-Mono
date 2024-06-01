@@ -197,7 +197,7 @@ private:
             std_msgs::Header header = imu_msg->header;
             header.frame_id = "world";
             if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
-                estimator_publisher->pubLatestOdometry(position_estimated_current, orientation_estimated_previous, linear_velocity_estimated_current, header);
+                estimator_publisher->pubLatestOdometry(position_estimated_current, orientation_estimated_current, linear_velocity_estimated_current, header);
         }
     }
 

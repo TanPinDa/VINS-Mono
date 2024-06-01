@@ -42,7 +42,7 @@ private:
 
     void pubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header);
 
-    void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
+    void pubCameraPose(const Vector3d &camera_position, const Eigen::Quaterniond &camera_orientation, const std_msgs::Header &header);
 
     void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
 
@@ -93,6 +93,9 @@ private:
 
     // Keyframes
     vector<Vector3d> key_poses_;
+
+    Eigen::Vector3d camera_position_in_world_frame_;
+    Eigen::Matrix3d camera_orientation_in_world_frame_;
     // ROS msgs
     visualization_msgs::Marker key_poses_msg_;
 

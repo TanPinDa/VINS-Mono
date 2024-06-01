@@ -25,16 +25,14 @@ EstimatorPublisher::EstimatorPublisher(ros::NodeHandle &n) : cameraposevisual(0,
     cameraposevisual.setLineWidth(0.05);
     keyframebasevisual.setScale(0.1);
     keyframebasevisual.setLineWidth(0.01);
-    
 
     key_poses_msg_.header.frame_id = "world";
     key_poses_msg_.lifetime = ros::Duration();
-    
+
     key_poses_msg_.ns = "key_poses";
     key_poses_msg_.type = visualization_msgs::Marker::SPHERE_LIST;
     key_poses_msg_.action = visualization_msgs::Marker::ADD;
     key_poses_msg_.pose.orientation.w = 1.0;
-    
 
     // static int key_poses_id = 0;
     key_poses_msg_.id = 0; // key_poses_id++;
@@ -111,17 +109,24 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
                                         imu_angular_velocity_estimated_bias_);
     estimator.UpdateKeyPoses(key_poses_);
     imu_camera_clock_offset_ = estimator.GetImuCameraClockOffset();
-
     estimator.UpdateCameraImuTransform(translation_cameras_to_imu_, rotation_cameras_to_imu_);
     estimator.UpdateDriftCorrectionData(drift_correction_translation_, drift_correction_rotation_);
+
+    // Update camera pose w.r.t world frame
+    // NOTE: Overe here we use  latest imu data but the original code instead used the second latest. Unaware if this is intentional or just a typo
+    camera_position_in_world_frame_ = position_estimated_current_ + orientation_estimated_current_ * translation_cameras_to_imu_[0];
+
+    // This there assumes that there is only one camera to publish, and it is the first one.
+    camera_orientation_in_world_frame_ = orientation_estimated_current_ * Quaterniond(rotation_cameras_to_imu_[0]);
 
     if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
         printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
         pubOdometry(position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, drift_correction_translation_, drift_correction_rotation_, header);
+        pubCameraPose(camera_position_in_world_frame_, Quaterniond(camera_orientation_in_world_frame_), header);
     }
     pubKeyPoses(key_poses_, header);
-    pubCameraPose(estimator, header);
+
     pubPointCloud(estimator, header);
     pubTF(estimator, header);
     pubKeyframe(estimator);
@@ -207,7 +212,7 @@ void EstimatorPublisher::pubKeyPoses(const vector<Vector3d> &key_poses, const st
 {
     if (key_poses.size() == 0)
         return;
-    
+
     key_poses_msg_.header = header;
     key_poses_msg_.header.frame_id = "world";
 
@@ -226,35 +231,17 @@ void EstimatorPublisher::pubKeyPoses(const vector<Vector3d> &key_poses, const st
     pub_key_poses.publish(key_poses_msg_);
 }
 
-void EstimatorPublisher::pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
+void EstimatorPublisher::pubCameraPose(const Vector3d &camera_position, const Eigen::Quaterniond &camera_orientation, const std_msgs::Header &header)
 {
-    int idx2 = WINDOW_SIZE - 1;
-
-    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
-    {
-        int i = idx2;
-        Vector3d P = estimator.positions_[i] + estimator.orientations_[i] * estimator.translation_cameras_to_imu_[0];
-        Quaterniond R = Quaterniond(estimator.orientations_[i] * estimator.rotation_cameras_to_imu_[0]);
-
-        nav_msgs::Odometry odometry;
-        odometry.header = header;
-        odometry.header.frame_id = "world";
-        odometry.pose.pose.position.x = P.x();
-        odometry.pose.pose.position.y = P.y();
-        odometry.pose.pose.position.z = P.z();
-        odometry.pose.pose.orientation.x = R.x();
-        odometry.pose.pose.orientation.y = R.y();
-        odometry.pose.pose.orientation.z = R.z();
-        odometry.pose.pose.orientation.w = R.w();
-
-        pub_camera_pose.publish(odometry);
-
-        cameraposevisual.reset();
-        cameraposevisual.add_pose(P, R);
-        cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);
-    }
+    nav_msgs::Odometry odometry;
+    odometry.header = header;
+    odometry.header.frame_id = "world";
+    UpdatePoseMessage(odometry.pose.pose, camera_position, camera_orientation);
+    pub_camera_pose.publish(odometry);
+    cameraposevisual.reset();
+    cameraposevisual.add_pose(camera_position, camera_orientation);
+    cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);
 }
-
 void EstimatorPublisher::pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
 {
     sensor_msgs::PointCloud point_cloud, loop_point_cloud;
