@@ -50,7 +50,7 @@ private:
 
     void pubKeyframe(const Estimator &estimator);
 
-    void UpdatePoseMessage(geometry_msgs::Pose pose_msg, const Vector3d &position, const Eigen::Quaterniond orientation);
+    void UpdatePoseMessage(geometry_msgs::Pose &pose_msg, const Vector3d &position, const Eigen::Quaterniond &orientation);
     void UpdateTwistMessage(geometry_msgs::Twist twist_msg, const Eigen::Vector3d &velocity);
 
     CameraPoseVisualization cameraposevisual;

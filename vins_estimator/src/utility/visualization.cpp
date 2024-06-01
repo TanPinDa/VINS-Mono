@@ -126,7 +126,7 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
     pubTF(estimator, header);
     pubKeyframe(estimator);
 }
-void EstimatorPublisher::UpdatePoseMessage(geometry_msgs::Pose pose_msg, const Vector3d &position, const Eigen::Quaterniond orientation)
+void EstimatorPublisher::UpdatePoseMessage(geometry_msgs::Pose &pose_msg, const Vector3d &position, const Eigen::Quaterniond &orientation)
 {
     pose_msg.position.x = position.x();
     pose_msg.position.y = position.y();
