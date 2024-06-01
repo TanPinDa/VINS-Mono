@@ -11,6 +11,8 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/Twist.h>
 #include <visualization_msgs/Marker.h>
 #include <tf/transform_broadcaster.h>
 #include "CameraPoseVisualization.h"
@@ -33,11 +35,9 @@ public:
     void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
 
 private:
-
-
     void printStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time);
 
-    void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
+    void pubOdometry(const Estimator &estimator, const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity, const std_msgs::Header &header);
 
     void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
 
@@ -48,6 +48,10 @@ private:
     void pubTF(const Estimator &estimator, const std_msgs::Header &header);
 
     void pubKeyframe(const Estimator &estimator);
+
+    void UpdatePoseMessage(geometry_msgs::Pose pose_msg, const Vector3d &position, const Eigen::Quaterniond orientation);
+    void UpdateTwistMessage(geometry_msgs::Twist twist_msg, const Eigen::Vector3d &velocity);
+
     CameraPoseVisualization cameraposevisual;
     CameraPoseVisualization keyframebasevisual;
     ros::Publisher pub_odometry, pub_latest_odometry;
@@ -71,8 +75,7 @@ private:
     Eigen::Vector3d linear_velocity_estimated_current_;
     Eigen::Vector3d imu_linear_acceleration_estimated_bias_;
     Eigen::Vector3d imu_angular_velocity_estimated_bias_;
-    
-    
+
     // Observed Variables
     Eigen::Vector3d linear_acceleration_current_;
     Eigen::Vector3d angular_velocity_current_;
@@ -82,4 +85,8 @@ private:
     Eigen::Matrix3d rotation_cameras_to_imu_[NUM_OF_CAM];
 
     double imu_camera_clock_offset_;
+
+    // ROS msgs
+
+    nav_msgs::Odometry odometry_msg_;
 };
