@@ -45,6 +45,7 @@ public:
     void vector2double();
     void double2vector();
     bool failureDetection();
+    double GetImuCameraClockOffset() const;
 
     enum SolverFlag
     {
@@ -63,11 +64,6 @@ public:
 
     MatrixXd Ap[2], backup_A;
     VectorXd bp[2], backup_b;
-
-    Matrix3d ric[NUM_OF_CAM];
-    Vector3d tic[NUM_OF_CAM];
-
-    double td;
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
@@ -145,9 +141,17 @@ public:
     Vector3d imu_linear_acceleration_biases_[(WINDOW_SIZE + 1)];
     Vector3d imu_angular_velocity_biases_[(WINDOW_SIZE + 1)];
 
+    // Camera to IMU
+    Vector3d translation_cameras_to_imu_[NUM_OF_CAM];
+    Matrix3d rotation_cameras_to_imu_[NUM_OF_CAM];
+
+    double imu_camera_clock_offset_;
+
     void GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
                                    Eigen::Quaterniond &out_orientation,
                                    Eigen::Vector3d &out_linear_velocity,
                                    Eigen::Vector3d &out_imu_linear_acceleration_bias,
-                                   Vector3d &out_imu_angular_velocity_bias );
+                                   Vector3d &out_imu_angular_velocity_bias) const;
+
+    void UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera_to_imu, Eigen::Matrix3d *out_rotation_camera_to_imu) const;
 };

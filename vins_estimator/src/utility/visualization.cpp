@@ -49,28 +49,22 @@ void EstimatorPublisher::pubLatestOdometry(const Eigen::Vector3d &P, const Eigen
     last_path = Vector3d(0.0, 0.0, 0.0);
 }
 
-void EstimatorPublisher::printStatistics(const Estimator &estimator, double t)
+void EstimatorPublisher::printStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time)
 {
-    if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
-        return;
-    printf("position: %f, %f, %f\r", estimator.positions_[WINDOW_SIZE].x(), estimator.positions_[WINDOW_SIZE].y(), estimator.positions_[WINDOW_SIZE].z());
-    ROS_DEBUG_STREAM("position: " << estimator.positions_[WINDOW_SIZE].transpose());
-    ROS_DEBUG_STREAM("orientation: " << estimator.linear_velocities_[WINDOW_SIZE].transpose());
+    printf("position: %f, %f, %f\r", position.x(), position.y(), position.z());
+    ROS_DEBUG_STREAM("position: " << position.transpose());
+    ROS_DEBUG_STREAM("orientation: " << linear_velocity.transpose());
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        //ROS_DEBUG("calibration result for camera %d", i);
-        ROS_DEBUG_STREAM("extirnsic tic: " << estimator.tic[i].transpose());
-        ROS_DEBUG_STREAM("extrinsic ric: " << Utility::R2ypr(estimator.ric[i]).transpose());
+        // ROS_DEBUG("calibration result for camera %d", i);
+        ROS_DEBUG_STREAM("extirnsic tic: " << translation_camera_to_imu[i].transpose());
+        ROS_DEBUG_STREAM("extrinsic ric: " << Utility::R2ypr(rotation_camera_to_imu[i]).transpose());
         if (ESTIMATE_EXTRINSIC)
         {
             cv::FileStorage fs(EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);
-            Eigen::Matrix3d eigen_R;
-            Eigen::Vector3d eigen_T;
-            eigen_R = estimator.ric[i];
-            eigen_T = estimator.tic[i];
             cv::Mat cv_R, cv_T;
-            cv::eigen2cv(eigen_R, cv_R);
-            cv::eigen2cv(eigen_T, cv_T);
+            cv::eigen2cv(rotation_camera_to_imu[i], cv_R);
+            cv::eigen2cv(translation_camera_to_imu[i], cv_T);
             fs << "extrinsicRotation" << cv_R << "extrinsicTranslation" << cv_T;
             fs.release();
         }
@@ -78,20 +72,30 @@ void EstimatorPublisher::printStatistics(const Estimator &estimator, double t)
 
     static double sum_of_time = 0;
     static int sum_of_calculation = 0;
-    sum_of_time += t;
+    sum_of_time += compute_time;
     sum_of_calculation++;
-    ROS_DEBUG("vo solver costs: %f ms", t);
+    ROS_DEBUG("vo solver costs: %f ms", compute_time);
     ROS_DEBUG("average of time %f ms", sum_of_time / sum_of_calculation);
 
-    sum_of_path += (estimator.positions_[WINDOW_SIZE] - last_path).norm();
-    last_path = estimator.positions_[WINDOW_SIZE];
+    sum_of_path += (position - last_path).norm();
+    last_path = position;
     ROS_DEBUG("sum of path %f", sum_of_path);
     if (ESTIMATE_TD)
-        ROS_INFO("td %f", estimator.td);
+        ROS_INFO("td %f", imu_camera_clock_offset);
 }
 void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::Header &header, const double &compute_time)
 {
-    printStatistics(estimator,compute_time);
+
+    estimator.GetLastestEstiamtedStates(position_estimated_current_,
+                                        orientation_estimated_current_,
+                                        linear_velocity_estimated_current_,
+                                        imu_linear_acceleration_estimated_bias_,
+                                        imu_angular_velocity_estimated_bias_);
+    imu_camera_clock_offset_ = estimator.GetImuCameraClockOffset();
+    estimator.UpdateCameraImuTransform(translation_cameras_to_imu_, rotation_cameras_to_imu_);
+
+    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
     pubOdometry(estimator, header);
     pubKeyPoses(estimator, header);
     pubCameraPose(estimator, header);
@@ -212,8 +216,8 @@ void EstimatorPublisher::pubCameraPose(const Estimator &estimator, const std_msg
     if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
         int i = idx2;
-        Vector3d P = estimator.positions_[i] + estimator.orientations_[i] * estimator.tic[0];
-        Quaterniond R = Quaterniond(estimator.orientations_[i] * estimator.ric[0]);
+        Vector3d P = estimator.positions_[i] + estimator.orientations_[i] * estimator.translation_cameras_to_imu_[0];
+        Quaterniond R = Quaterniond(estimator.orientations_[i] * estimator.rotation_cameras_to_imu_[0]);
 
         nav_msgs::Odometry odometry;
         odometry.header = header;
@@ -251,7 +255,7 @@ void EstimatorPublisher::pubPointCloud(const Estimator &estimator, const std_msg
             continue;
         int imu_i = it_per_id.start_frame;
         Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-        Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0]) + estimator.positions_[imu_i];
+        Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.rotation_cameras_to_imu_[0] * pts_i + estimator.translation_cameras_to_imu_[0]) + estimator.positions_[imu_i];
 
         geometry_msgs::Point32 p;
         p.x = w_pts_i(0);
@@ -275,12 +279,11 @@ void EstimatorPublisher::pubPointCloud(const Estimator &estimator, const std_msg
         //if (it_per_id->start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id->solve_flag != 1)
         //        continue;
 
-        if (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 
-            && it_per_id.solve_flag == 1 )
+        if (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 && it_per_id.solve_flag == 1)
         {
             int imu_i = it_per_id.start_frame;
             Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-            Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0]) + estimator.positions_[imu_i];
+            Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.rotation_cameras_to_imu_[0] * pts_i + estimator.translation_cameras_to_imu_[0]) + estimator.positions_[imu_i];
 
             geometry_msgs::Point32 p;
             p.x = w_pts_i(0);
@@ -316,23 +319,23 @@ void EstimatorPublisher::pubTF(const Estimator &estimator, const std_msgs::Heade
     br.sendTransform(tf::StampedTransform(transform, header.stamp, "world", "body"));
 
     // camera frame
-    transform.setOrigin(tf::Vector3(estimator.tic[0].x(),
-                                    estimator.tic[0].y(),
-                                    estimator.tic[0].z()));
-    q.setW(Quaterniond(estimator.ric[0]).w());
-    q.setX(Quaterniond(estimator.ric[0]).x());
-    q.setY(Quaterniond(estimator.ric[0]).y());
-    q.setZ(Quaterniond(estimator.ric[0]).z());
+    transform.setOrigin(tf::Vector3(estimator.translation_cameras_to_imu_[0].x(),
+                                    estimator.translation_cameras_to_imu_[0].y(),
+                                    estimator.translation_cameras_to_imu_[0].z()));
+    q.setW(Quaterniond(estimator.rotation_cameras_to_imu_[0]).w());
+    q.setX(Quaterniond(estimator.rotation_cameras_to_imu_[0]).x());
+    q.setY(Quaterniond(estimator.rotation_cameras_to_imu_[0]).y());
+    q.setZ(Quaterniond(estimator.rotation_cameras_to_imu_[0]).z());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, header.stamp, "body", "camera"));
 
     nav_msgs::Odometry odometry;
     odometry.header = header;
     odometry.header.frame_id = "world";
-    odometry.pose.pose.position.x = estimator.tic[0].x();
-    odometry.pose.pose.position.y = estimator.tic[0].y();
-    odometry.pose.pose.position.z = estimator.tic[0].z();
-    Quaterniond tmp_q{estimator.ric[0]};
+    odometry.pose.pose.position.x = estimator.translation_cameras_to_imu_[0].x();
+    odometry.pose.pose.position.y = estimator.translation_cameras_to_imu_[0].y();
+    odometry.pose.pose.position.z = estimator.translation_cameras_to_imu_[0].z();
+    Quaterniond tmp_q{estimator.rotation_cameras_to_imu_[0]};
     odometry.pose.pose.orientation.x = tmp_q.x();
     odometry.pose.pose.orientation.y = tmp_q.y();
     odometry.pose.pose.orientation.z = tmp_q.z();
@@ -378,7 +381,7 @@ void EstimatorPublisher::pubKeyframe(const Estimator &estimator)
 
                 int imu_i = it_per_id.start_frame;
                 Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-                Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0]) + estimator.positions_[imu_i];
+                Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.rotation_cameras_to_imu_[0] * pts_i + estimator.translation_cameras_to_imu_[0]) + estimator.positions_[imu_i];
                 geometry_msgs::Point32 p;
                 p.x = w_pts_i(0);
                 p.y = w_pts_i(1);

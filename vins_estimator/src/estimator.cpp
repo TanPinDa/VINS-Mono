@@ -12,13 +12,13 @@ void Estimator::setParameter()
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        tic[i] = TIC[i];
-        ric[i] = RIC[i];
+        translation_cameras_to_imu_[i] = TIC[i];
+        rotation_cameras_to_imu_[i] = RIC[i];
     }
-    f_manager.setRic(ric);
+    f_manager.setRic(rotation_cameras_to_imu_);
     ProjectionFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionTdFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
-    td = TD;
+    imu_camera_clock_offset_ = TD;
 }
 
 void Estimator::clearState()
@@ -41,8 +41,8 @@ void Estimator::clearState()
 
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        tic[i] = Vector3d::Zero();
-        ric[i] = Matrix3d::Identity();
+        translation_cameras_to_imu_[i] = Vector3d::Zero();
+        rotation_cameras_to_imu_[i] = Matrix3d::Identity();
     }
 
     for (auto &it : all_image_frame)
@@ -62,7 +62,7 @@ void Estimator::clearState()
     solver_flag = INITIAL;
     initial_timestamp = 0;
     all_image_frame.clear();
-    td = TD;
+    imu_camera_clock_offset_ = TD;
 
     if (tmp_pre_integration != nullptr)
         delete tmp_pre_integration;
@@ -122,7 +122,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 {
     spdlog::debug("new image coming ------------------------------------------");
     spdlog::debug("Adding feature points {}", image.size());
-    if (f_manager.addFeatureCheckParallax(frame_count, image, td))
+    if (f_manager.addFeatureCheckParallax(frame_count, image, imu_camera_clock_offset_))
         marginalization_flag = MARGIN_OLD;
     else
         marginalization_flag = MARGIN_SECOND_NEW;
@@ -149,7 +149,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             {
                 spdlog::warn("initial extrinsic rotation calib success");
                 spdlog::warn("initial extrinsic rotation:\n {}", fmt::streamed(calib_ric));
-                ric[0] = calib_ric;
+                rotation_cameras_to_imu_[0] = calib_ric;
                 RIC[0] = calib_ric;
                 ESTIMATE_EXTRINSIC = 1;
             }
@@ -391,8 +391,8 @@ bool Estimator::visualInitialAlign()
     Vector3d TIC_TMP[NUM_OF_CAM];
     for (int i = 0; i < NUM_OF_CAM; i++)
         TIC_TMP[i].setZero();
-    ric[0] = RIC[0];
-    f_manager.setRic(ric);
+    rotation_cameras_to_imu_[0] = RIC[0];
+    f_manager.setRic(rotation_cameras_to_imu_);
     f_manager.triangulate(positions_, &(TIC_TMP[0]), &(RIC[0]));
 
     double s = (x.tail<1>())(0);
@@ -479,7 +479,7 @@ void Estimator::solveOdometry()
     if (solver_flag == NON_LINEAR)
     {
         TicToc t_tri;
-        f_manager.triangulate(positions_, tic, ric);
+        f_manager.triangulate(positions_, translation_cameras_to_imu_, rotation_cameras_to_imu_);
         spdlog::debug("triangulation costs {}", t_tri.toc());
         optimization();
     }
@@ -512,10 +512,10 @@ void Estimator::vector2double()
     }
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        para_Ex_Pose[i][0] = tic[i].x();
-        para_Ex_Pose[i][1] = tic[i].y();
-        para_Ex_Pose[i][2] = tic[i].z();
-        Quaterniond q{ric[i]};
+        para_Ex_Pose[i][0] = translation_cameras_to_imu_[i].x();
+        para_Ex_Pose[i][1] = translation_cameras_to_imu_[i].y();
+        para_Ex_Pose[i][2] = translation_cameras_to_imu_[i].z();
+        Quaterniond q{rotation_cameras_to_imu_[i]};
         para_Ex_Pose[i][3] = q.x();
         para_Ex_Pose[i][4] = q.y();
         para_Ex_Pose[i][5] = q.z();
@@ -526,7 +526,7 @@ void Estimator::vector2double()
     for (int i = 0; i < f_manager.getFeatureCount(); i++)
         para_Feature[i][0] = dep(i);
     if (ESTIMATE_TD)
-        para_Td[0][0] = td;
+        para_Td[0][0] = imu_camera_clock_offset_;
 }
 
 void Estimator::double2vector()
@@ -584,10 +584,10 @@ void Estimator::double2vector()
 
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        tic[i] = Vector3d(para_Ex_Pose[i][0],
+        translation_cameras_to_imu_[i] = Vector3d(para_Ex_Pose[i][0],
                           para_Ex_Pose[i][1],
                           para_Ex_Pose[i][2]);
-        ric[i] = Quaterniond(para_Ex_Pose[i][6],
+        rotation_cameras_to_imu_[i] = Quaterniond(para_Ex_Pose[i][6],
                              para_Ex_Pose[i][3],
                              para_Ex_Pose[i][4],
                              para_Ex_Pose[i][5])
@@ -599,7 +599,7 @@ void Estimator::double2vector()
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
     if (ESTIMATE_TD)
-        td = para_Td[0][0];
+        imu_camera_clock_offset_ = para_Td[0][0];
 
     // relative info between two loop frame
     if (relocalization_info)
@@ -1117,10 +1117,10 @@ void Estimator::slideWindowOld()
     {
         Matrix3d R0, R1;
         Vector3d P0, P1;
-        R0 = back_R0 * ric[0];
-        R1 = orientations_[0] * ric[0];
-        P0 = back_P0 + back_R0 * tic[0];
-        P1 = positions_[0] + orientations_[0] * tic[0];
+        R0 = back_R0 * rotation_cameras_to_imu_[0];
+        R1 = orientations_[0] * rotation_cameras_to_imu_[0];
+        P0 = back_P0 + back_R0 * translation_cameras_to_imu_[0];
+        P1 = positions_[0] + orientations_[0] * translation_cameras_to_imu_[0];
         f_manager.removeBackShiftDepth(R0, P0, R1, P1);
     }
     else
@@ -1151,11 +1151,24 @@ void Estimator::GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
                                           Eigen::Quaterniond &out_orientation,
                                           Eigen::Vector3d &out_linear_velocity,
                                           Eigen::Vector3d &out_imu_linear_acceleration_bias,
-                                          Eigen::Vector3d &out_imu_angular_velocity_bias )
+                                          Eigen::Vector3d &out_imu_angular_velocity_bias) const
 {
     out_position = positions_[WINDOW_SIZE];
     out_orientation = orientations_[WINDOW_SIZE];
     out_linear_velocity = linear_velocities_[WINDOW_SIZE];
     out_imu_linear_acceleration_bias = imu_linear_acceleration_biases_[WINDOW_SIZE];
     out_imu_angular_velocity_bias = imu_angular_velocity_biases_[WINDOW_SIZE];
+}
+
+void Estimator::UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera_to_imu, Eigen::Matrix3d *out_rotation_camera_to_imu) const
+{
+    for (int i = 0; i < NUM_OF_CAM; ++i)
+    {
+        out_translation_camera_to_imu[i] = translation_cameras_to_imu_[i];
+        out_rotation_camera_to_imu[i] = rotation_cameras_to_imu_[i];
+    }
+}
+double Estimator::GetImuCameraClockOffset() const
+{
+    return imu_camera_clock_offset_;
 }

@@ -35,7 +35,7 @@ public:
 private:
 
 
-    void printStatistics(const Estimator &estimator, double t);
+    void printStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time);
 
     void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
 
@@ -64,4 +64,22 @@ private:
     double sum_of_path;
 
     Vector3d last_path;
+
+    // State Variables
+    Eigen::Vector3d position_estimated_current_;
+    Eigen::Quaterniond orientation_estimated_current_;
+    Eigen::Vector3d linear_velocity_estimated_current_;
+    Eigen::Vector3d imu_linear_acceleration_estimated_bias_;
+    Eigen::Vector3d imu_angular_velocity_estimated_bias_;
+    
+    
+    // Observed Variables
+    Eigen::Vector3d linear_acceleration_current_;
+    Eigen::Vector3d angular_velocity_current_;
+
+    // Camera to IMU
+    Eigen::Vector3d translation_cameras_to_imu_[NUM_OF_CAM];
+    Eigen::Matrix3d rotation_cameras_to_imu_[NUM_OF_CAM];
+
+    double imu_camera_clock_offset_;
 };
