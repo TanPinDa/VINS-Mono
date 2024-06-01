@@ -40,7 +40,7 @@ private:
     void pubOdometry(const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity,
                                 const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header);
 
-    void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
+    void pubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header);
 
     void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
 
@@ -90,6 +90,10 @@ private:
 
     Vector3d drift_correction_translation_;
     Matrix3d drift_correction_rotation_;
+
+    // Keyframes
+    vector<Vector3d> key_poses_;
     // ROS msgs
+    visualization_msgs::Marker key_poses_msg_;
 
 };

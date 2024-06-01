@@ -25,6 +25,24 @@ EstimatorPublisher::EstimatorPublisher(ros::NodeHandle &n) : cameraposevisual(0,
     cameraposevisual.setLineWidth(0.05);
     keyframebasevisual.setScale(0.1);
     keyframebasevisual.setLineWidth(0.01);
+    
+
+    key_poses_msg_.header.frame_id = "world";
+    key_poses_msg_.lifetime = ros::Duration();
+    
+    key_poses_msg_.ns = "key_poses";
+    key_poses_msg_.type = visualization_msgs::Marker::SPHERE_LIST;
+    key_poses_msg_.action = visualization_msgs::Marker::ADD;
+    key_poses_msg_.pose.orientation.w = 1.0;
+    
+
+    // static int key_poses_id = 0;
+    key_poses_msg_.id = 0; // key_poses_id++;
+    key_poses_msg_.scale.x = 0.05;
+    key_poses_msg_.scale.y = 0.05;
+    key_poses_msg_.scale.z = 0.05;
+    key_poses_msg_.color.r = 1.0;
+    key_poses_msg_.color.a = 1.0;
 }
 
 void EstimatorPublisher::pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const std_msgs::Header &header)
@@ -91,7 +109,9 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
                                         linear_velocity_estimated_current_,
                                         imu_linear_acceleration_estimated_bias_,
                                         imu_angular_velocity_estimated_bias_);
+    estimator.UpdateKeyPoses(key_poses_);
     imu_camera_clock_offset_ = estimator.GetImuCameraClockOffset();
+
     estimator.UpdateCameraImuTransform(translation_cameras_to_imu_, rotation_cameras_to_imu_);
     estimator.UpdateDriftCorrectionData(drift_correction_translation_, drift_correction_rotation_);
 
@@ -100,7 +120,7 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
         printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
         pubOdometry(position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, drift_correction_translation_, drift_correction_rotation_, header);
     }
-    pubKeyPoses(estimator, header);
+    pubKeyPoses(key_poses_, header);
     pubCameraPose(estimator, header);
     pubPointCloud(estimator, header);
     pubTF(estimator, header);
@@ -183,38 +203,27 @@ void EstimatorPublisher::pubOdometry(const Vector3d &position, const Eigen::Quat
     foutC.close();
 }
 
-void EstimatorPublisher::pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header)
+void EstimatorPublisher::pubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header)
 {
-    if (estimator.key_poses.size() == 0)
+    if (key_poses.size() == 0)
         return;
-    visualization_msgs::Marker key_poses;
-    key_poses.header = header;
-    key_poses.header.frame_id = "world";
-    key_poses.ns = "key_poses";
-    key_poses.type = visualization_msgs::Marker::SPHERE_LIST;
-    key_poses.action = visualization_msgs::Marker::ADD;
-    key_poses.pose.orientation.w = 1.0;
-    key_poses.lifetime = ros::Duration();
+    
+    key_poses_msg_.header = header;
+    key_poses_msg_.header.frame_id = "world";
 
-    // static int key_poses_id = 0;
-    key_poses.id = 0; // key_poses_id++;
-    key_poses.scale.x = 0.05;
-    key_poses.scale.y = 0.05;
-    key_poses.scale.z = 0.05;
-    key_poses.color.r = 1.0;
-    key_poses.color.a = 1.0;
+    key_poses_msg_.lifetime = ros::Duration();
 
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
         geometry_msgs::Point pose_marker;
         Vector3d correct_pose;
-        correct_pose = estimator.key_poses[i];
+        correct_pose = key_poses[i];
         pose_marker.x = correct_pose.x();
         pose_marker.y = correct_pose.y();
         pose_marker.z = correct_pose.z();
-        key_poses.points.push_back(pose_marker);
+        key_poses_msg_.points.push_back(pose_marker);
     }
-    pub_key_poses.publish(key_poses);
+    pub_key_poses.publish(key_poses_msg_);
 }
 
 void EstimatorPublisher::pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)

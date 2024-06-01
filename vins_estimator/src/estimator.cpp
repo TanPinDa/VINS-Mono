@@ -1169,12 +1169,20 @@ void Estimator::UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera
     }
 }
 
-void Estimator::UpdateDriftCorrectionData(Eigen::Vector3d &drift_correction_translation, Eigen::Matrix3d &drift_correction_rotation) const
+void Estimator::UpdateDriftCorrectionData(Eigen::Vector3d &out_drift_correction_translation, Eigen::Matrix3d &out_drift_correction_rotation) const
 {
-    drift_correction_translation = drift_correction_translation_;
-    drift_correction_rotation = drift_correction_rotation_;
+    out_drift_correction_translation = drift_correction_translation_;
+    out_drift_correction_rotation = drift_correction_rotation_;
 }
 double Estimator::GetImuCameraClockOffset() const
 {
     return imu_camera_clock_offset_;
+}
+
+void Estimator::UpdateKeyPoses(vector<Vector3d> out_key_poses) const
+{
+
+    out_key_poses = key_poses;
+    
+
 }

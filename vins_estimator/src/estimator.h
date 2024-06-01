@@ -83,7 +83,7 @@ public:
 
     vector<Vector3d> point_cloud;
     vector<Vector3d> margin_cloud;
-    vector<Vector3d> key_poses;
+
     double initial_timestamp;
 
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
@@ -147,6 +147,7 @@ public:
     Matrix3d drift_correction_rotation_;
     Vector3d drift_correction_translation_;
 
+    vector<Vector3d> key_poses;
     void GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
                                    Eigen::Quaterniond &out_orientation,
                                    Eigen::Vector3d &out_linear_velocity,
@@ -155,5 +156,7 @@ public:
 
     void UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera_to_imu, Eigen::Matrix3d *out_rotation_camera_to_imu) const;
 
-    void UpdateDriftCorrectionData(Eigen::Vector3d &drift_correct_translationMatrix3d, Eigen::Matrix3d &drift_correction_rotation ) const;
+    void UpdateDriftCorrectionData(Eigen::Vector3d &out_drift_correct_translationMatrix3d, Eigen::Matrix3d &out_drift_correction_rotation) const;
+
+    void UpdateKeyPoses(vector<Vector3d> out_key_poses) const;
 };
