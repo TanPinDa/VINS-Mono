@@ -89,6 +89,17 @@ void EstimatorPublisher::printStatistics(const Estimator &estimator, double t)
     if (ESTIMATE_TD)
         ROS_INFO("td %f", estimator.td);
 }
+void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::Header &header, const double &compute_time)
+{
+    printStatistics(estimator,compute_time);
+    pubOdometry(estimator, header);
+    pubKeyPoses(estimator, header);
+    pubCameraPose(estimator, header);
+    pubPointCloud(estimator, header);
+    pubTF(estimator, header);
+    pubKeyframe(estimator);
+    
+}
 
 void EstimatorPublisher::pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
 {

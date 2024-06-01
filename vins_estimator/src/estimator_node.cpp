@@ -354,16 +354,10 @@ private:
                 estimator.processImage(image, img_msg->header.stamp.toSec());
 
                 double whole_t = t_s.toc();
-                estimator_publisher->printStatistics(estimator, whole_t);
                 std_msgs::Header header = img_msg->header;
                 header.frame_id = "world";
+                estimator_publisher->PublishAll(estimator, header, whole_t);
 
-                estimator_publisher->pubOdometry(estimator, header);
-                estimator_publisher->pubKeyPoses(estimator, header);
-                estimator_publisher->pubCameraPose(estimator, header);
-                estimator_publisher->pubPointCloud(estimator, header);
-                estimator_publisher->pubTF(estimator, header);
-                estimator_publisher->pubKeyframe(estimator);
                 if (relo_msg != NULL)
                     estimator_publisher->pubRelocalization(estimator);
                 // ROS_ERROR("end: %f, at %f", img_msg->header.stamp.toSec(), ros::Time::now().toSec());

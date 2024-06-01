@@ -24,13 +24,20 @@ class EstimatorPublisher
 {
 public:
     EstimatorPublisher(ros::NodeHandle &n);
+
+    void PublishAll(const Estimator &estimator, const std_msgs::Header &header, const double &compute_time);
     void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const std_msgs::Header &header);
+    void pubRelocalization(const Estimator &estimator);
+
+    // unused
+    void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
+
+private:
+
 
     void printStatistics(const Estimator &estimator, double t);
 
     void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
-
-    void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
 
     void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
 
@@ -41,10 +48,6 @@ public:
     void pubTF(const Estimator &estimator, const std_msgs::Header &header);
 
     void pubKeyframe(const Estimator &estimator);
-
-    void pubRelocalization(const Estimator &estimator);
-
-private:
     CameraPoseVisualization cameraposevisual;
     CameraPoseVisualization keyframebasevisual;
     ros::Publisher pub_odometry, pub_latest_odometry;
