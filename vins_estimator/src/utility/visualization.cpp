@@ -93,11 +93,12 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
                                         imu_angular_velocity_estimated_bias_);
     imu_camera_clock_offset_ = estimator.GetImuCameraClockOffset();
     estimator.UpdateCameraImuTransform(translation_cameras_to_imu_, rotation_cameras_to_imu_);
+    estimator.UpdateDriftCorrectionData(drift_correction_translation_, drift_correction_rotation_);
 
     if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
         printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
-        pubOdometry(estimator, position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, header);
+        pubOdometry(position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, drift_correction_translation_, drift_correction_rotation_, header);
     }
     pubKeyPoses(estimator, header);
     pubCameraPose(estimator, header);
@@ -122,7 +123,8 @@ void EstimatorPublisher::UpdateTwistMessage(geometry_msgs::Twist twist_msg, cons
     twist_msg.linear.y = velocity.y();
     twist_msg.linear.z = velocity.z();
 }
-void EstimatorPublisher::pubOdometry(const Estimator &estimator, const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity, const std_msgs::Header &header)
+void EstimatorPublisher::pubOdometry(const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity,
+                                     const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header)
 {
 
     nav_msgs::Odometry odometry;
@@ -131,7 +133,6 @@ void EstimatorPublisher::pubOdometry(const Estimator &estimator, const Vector3d 
     odometry.child_frame_id = "world";
     UpdatePoseMessage(odometry.pose.pose, position, orientation);
     UpdateTwistMessage(odometry.twist.twist, linear_velocity);
-
 
     pub_odometry.publish(odometry);
 
@@ -147,8 +148,8 @@ void EstimatorPublisher::pubOdometry(const Estimator &estimator, const Vector3d 
     Vector3d correct_t;
     Vector3d correct_v;
     Quaterniond correct_q;
-    correct_t = estimator.drift_correct_r * position + estimator.drift_correct_t;
-    correct_q = estimator.drift_correct_r * orientation;
+    correct_t = drift_correction_rotation * position + drift_correction_translation;
+    correct_q = drift_correction_rotation * orientation;
     odometry.pose.pose.position.x = correct_t.x();
     odometry.pose.pose.position.y = correct_t.y();
     odometry.pose.pose.position.z = correct_t.z();

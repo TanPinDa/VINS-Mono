@@ -109,15 +109,12 @@ public:
     int relo_frame_local_index;
     vector<Vector3d> match_points;
     double relo_Pose[SIZE_POSE];
-    Matrix3d drift_correct_r;
-    Vector3d drift_correct_t;
+
     Vector3d prev_relo_t;
     Matrix3d prev_relo_r;
     Vector3d relo_relative_t;
     Quaterniond relo_relative_q;
     double relo_relative_yaw;
-
-
 
     // Params
 
@@ -144,8 +141,11 @@ public:
     // Camera to IMU
     Vector3d translation_cameras_to_imu_[NUM_OF_CAM];
     Matrix3d rotation_cameras_to_imu_[NUM_OF_CAM];
-
     double imu_camera_clock_offset_;
+
+    // Relocalisation Corrections
+    Matrix3d drift_correction_rotation_;
+    Vector3d drift_correction_translation_;
 
     void GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
                                    Eigen::Quaterniond &out_orientation,
@@ -154,4 +154,6 @@ public:
                                    Vector3d &out_imu_angular_velocity_bias) const;
 
     void UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera_to_imu, Eigen::Matrix3d *out_rotation_camera_to_imu) const;
+
+    void UpdateDriftCorrectionData(Eigen::Vector3d &drift_correct_translationMatrix3d, Eigen::Matrix3d &drift_correction_rotation ) const;
 };

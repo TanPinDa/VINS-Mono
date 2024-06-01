@@ -78,8 +78,8 @@ void Estimator::clearState()
     failure_occur = 0;
     relocalization_info = 0;
 
-    drift_correct_r = Matrix3d::Identity();
-    drift_correct_t = Vector3d::Zero();
+    drift_correction_rotation_ = Matrix3d::Identity();
+    drift_correction_translation_ = Vector3d::Zero();
 }
 
 void Estimator::processIMU(double dt, const Vector3d &input_linear_acceleration, const Vector3d &input_angular_velocity)
@@ -585,13 +585,13 @@ void Estimator::double2vector()
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         translation_cameras_to_imu_[i] = Vector3d(para_Ex_Pose[i][0],
-                          para_Ex_Pose[i][1],
-                          para_Ex_Pose[i][2]);
+                                                  para_Ex_Pose[i][1],
+                                                  para_Ex_Pose[i][2]);
         rotation_cameras_to_imu_[i] = Quaterniond(para_Ex_Pose[i][6],
-                             para_Ex_Pose[i][3],
-                             para_Ex_Pose[i][4],
-                             para_Ex_Pose[i][5])
-                     .toRotationMatrix();
+                                                  para_Ex_Pose[i][3],
+                                                  para_Ex_Pose[i][4],
+                                                  para_Ex_Pose[i][5])
+                                          .toRotationMatrix();
     }
 
     VectorXd dep = f_manager.getDepthVector();
@@ -613,8 +613,8 @@ void Estimator::double2vector()
                  origin_P0;
         double drift_correct_yaw;
         drift_correct_yaw = Utility::R2ypr(prev_relo_r).x() - Utility::R2ypr(relo_r).x();
-        drift_correct_r = Utility::ypr2R(Vector3d(drift_correct_yaw, 0, 0));
-        drift_correct_t = prev_relo_t - drift_correct_r * relo_t;
+        drift_correction_rotation_ = Utility::ypr2R(Vector3d(drift_correct_yaw, 0, 0));
+        drift_correction_translation_ = prev_relo_t - drift_correction_rotation_ * relo_t;
         relo_relative_t = relo_r.transpose() * (positions_[relo_frame_local_index] - relo_t);
         relo_relative_q = relo_r.transpose() * orientations_[relo_frame_local_index];
         relo_relative_yaw = Utility::normalizeAngle(Utility::R2ypr(orientations_[relo_frame_local_index]).x() - Utility::R2ypr(relo_r).x());
@@ -1154,7 +1154,7 @@ void Estimator::GetLastestEstiamtedStates(Eigen::Vector3d &out_position,
                                           Eigen::Vector3d &out_imu_angular_velocity_bias) const
 {
     out_position = positions_[WINDOW_SIZE];
-    out_orientation = orientations_[WINDOW_SIZE];
+    out_orientation = orientations_[WINDOW_SIZE]; // Implicit converion from Matrix to Quat
     out_linear_velocity = linear_velocities_[WINDOW_SIZE];
     out_imu_linear_acceleration_bias = imu_linear_acceleration_biases_[WINDOW_SIZE];
     out_imu_angular_velocity_bias = imu_angular_velocity_biases_[WINDOW_SIZE];
@@ -1167,6 +1167,12 @@ void Estimator::UpdateCameraImuTransform(Eigen::Vector3d *out_translation_camera
         out_translation_camera_to_imu[i] = translation_cameras_to_imu_[i];
         out_rotation_camera_to_imu[i] = rotation_cameras_to_imu_[i];
     }
+}
+
+void Estimator::UpdateDriftCorrectionData(Eigen::Vector3d &drift_correction_translation, Eigen::Matrix3d &drift_correction_rotation) const
+{
+    drift_correction_translation = drift_correction_translation_;
+    drift_correction_rotation = drift_correction_rotation_;
 }
 double Estimator::GetImuCameraClockOffset() const
 {
