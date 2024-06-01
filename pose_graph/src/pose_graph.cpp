@@ -138,37 +138,7 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     P = r_drift * P + t_drift;
     R = r_drift * R;
     cur_kf->updatePose(P, R);
-    // Quaterniond Q{R};
-    // geometry_msgs::PoseStamped pose_stamped;
-    // pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
-    // pose_stamped.header.frame_id = "world";
-    // pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-    // pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-    // pose_stamped.pose.position.z = P.z();
-    // pose_stamped.pose.orientation.x = Q.x();
-    // pose_stamped.pose.orientation.y = Q.y();
-    // pose_stamped.pose.orientation.z = Q.z();
-    // pose_stamped.pose.orientation.w = Q.w();
-    // path[sequence_cnt].poses.push_back(pose_stamped);
-    // path[sequence_cnt].header = pose_stamped.header;
 
-    // if (SAVE_LOOP_PATH)
-    // {
-    //     ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
-    //     loop_path_file.setf(ios::fixed, ios::floatfield);
-    //     loop_path_file.precision(0);
-    //     loop_path_file << cur_kf->time_stamp * 1e9 << ",";
-    //     loop_path_file.precision(5);
-    //     loop_path_file  << P.x() << ","
-    //           << P.y() << ","
-    //           << P.z() << ","
-    //           << Q.w() << ","
-    //           << Q.x() << ","
-    //           << Q.y() << ","
-    //           << Q.z() << ","
-    //           << endl;
-    //     loop_path_file.close();
-    // }
     //draw local connection
     if (SHOW_S_EDGE)
     {
@@ -212,8 +182,7 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
 
         }
     }
-    //posegraph_visualization->add_pose(P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0), Q);
-
+    
 	keyframelist.push_back(cur_kf);
     // publish();
 	m_keyframelist.unlock();
