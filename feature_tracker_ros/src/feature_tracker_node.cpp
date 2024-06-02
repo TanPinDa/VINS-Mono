@@ -15,7 +15,7 @@ vector<uchar> r_status;
 vector<float> r_err;
 queue<sensor_msgs::ImageConstPtr> img_buf;
 
-ros::Publisher pub_img,pub_match;
+ros::Publisher pub_feature_pointcloud,pub_match;
 ros::Publisher pub_restart;
 
 FeatureTracker trackerData[NUM_OF_CAM];
@@ -113,6 +113,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
    if (PUB_THIS_FRAME)
    {
         pub_count++;
+        // Publishes a point cloud message with 5 channels. The depth of all the points is set to 1 (arbitarily?) 
         sensor_msgs::PointCloudPtr feature_points(new sensor_msgs::PointCloud);
         sensor_msgs::ChannelFloat32 id_of_point;
         sensor_msgs::ChannelFloat32 u_of_point;
@@ -162,7 +163,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             init_pub = 1;
         }
         else
-            pub_img.publish(feature_points);
+            pub_feature_pointcloud.publish(feature_points);
 
         if (SHOW_TRACK)
         {
@@ -230,7 +231,7 @@ int main(int argc, char **argv)
 
     ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
 
-    pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
+    pub_feature_pointcloud = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
     pub_match = n.advertise<sensor_msgs::Image>("feature_img",1000);
     pub_restart = n.advertise<std_msgs::Bool>("restart",1000);
     /*

@@ -7,17 +7,17 @@ int FeaturePerId::endFrame()
 }
 
 FeatureManager::FeatureManager(Matrix3d _Rs[])
-    : Rs(_Rs)
+    : imu_orientations_wrt_world_(_Rs)
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
-        ric[i].setIdentity();
+        rotation_of_cameras_to_imu_[i].setIdentity();
 }
 
-void FeatureManager::setRic(Matrix3d _ric[])
+void FeatureManager::SetRotationCameraToImu(Matrix3d _ric[])
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        ric[i] = _ric[i];
+        rotation_of_cameras_to_imu_[i] = _ric[i];
     }
 }
 
@@ -200,7 +200,7 @@ VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
-void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
+void FeatureManager::triangulate(Vector3d translations_imu_to_world[], Vector3d translations_camera_to_imu[], Matrix3d rotations_camera_to_imu[])
 {
     for (auto &it_per_id : feature)
     {
@@ -217,8 +217,8 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         int svd_idx = 0;
 
         Eigen::Matrix<double, 3, 4> P0;
-        Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
-        Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
+        Eigen::Vector3d t0 = translations_imu_to_world[imu_i] + imu_orientations_wrt_world_[imu_i] * translations_camera_to_imu[0];
+        Eigen::Matrix3d R0 = imu_orientations_wrt_world_[imu_i] * rotations_camera_to_imu[0];
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();
         P0.rightCols<1>() = Eigen::Vector3d::Zero();
 
@@ -226,8 +226,8 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         {
             imu_j++;
 
-            Eigen::Vector3d t1 = Ps[imu_j] + Rs[imu_j] * tic[0];
-            Eigen::Matrix3d R1 = Rs[imu_j] * ric[0];
+            Eigen::Vector3d t1 = translations_imu_to_world[imu_j] + imu_orientations_wrt_world_[imu_j] * translations_camera_to_imu[0];
+            Eigen::Matrix3d R1 = imu_orientations_wrt_world_[imu_j] * rotation_of_cameras_to_imu_[0];
             Eigen::Vector3d t = R0.transpose() * (t1 - t0);
             Eigen::Matrix3d R = R0.transpose() * R1;
             Eigen::Matrix<double, 3, 4> P;
@@ -372,7 +372,7 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
 
     //int r_i = frame_count - 2;
     //int r_j = frame_count - 1;
-    //p_i_comp = ric[camera_id_j].transpose() * Rs[r_j].transpose() * Rs[r_i] * ric[camera_id_i] * p_i;
+    //p_i_comp = rotations_camera_to_imu[camera_id_j].transpose() * Rs[r_j].transpose() * Rs[r_i] * rotations_camera_to_imu[camera_id_i] * p_i;
     p_i_comp = p_i;
     double dep_i = p_i(2);
     double u_i = p_i(0) / dep_i;

@@ -15,7 +15,7 @@ void Estimator::setParameter()
         translation_cameras_to_imu_[i] = TIC[i];
         rotation_cameras_to_imu_[i] = RIC[i];
     }
-    f_manager.setRic(rotation_cameras_to_imu_);
+    f_manager.SetRotationCameraToImu(rotation_cameras_to_imu_);
     ProjectionFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionTdFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     imu_camera_clock_offset_ = TD;
@@ -392,7 +392,7 @@ bool Estimator::VisualInitialAlign()
     for (int i = 0; i < NUM_OF_CAM; i++)
         TIC_TMP[i].setZero();
     rotation_cameras_to_imu_[0] = RIC[0];
-    f_manager.setRic(rotation_cameras_to_imu_);
+    f_manager.SetRotationCameraToImu(rotation_cameras_to_imu_);
     f_manager.triangulate(positions_, &(TIC_TMP[0]), &(RIC[0]));
 
     double s = (x.tail<1>())(0);
@@ -746,9 +746,9 @@ void Estimator::Optimization()
             Vector3d pts_j = it_per_frame.point;
             if (ESTIMATE_TD)
             {
-                ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocity,
-                                                                  it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
-                                                                  it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
+                ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].pixel_velocity_, it_per_frame.pixel_velocity_,
+                                                                  it_per_id.feature_per_frame[0].imu_camera_clock_offset_current_, it_per_frame.imu_camera_clock_offset_current_,
+                                                                  it_per_id.feature_per_frame[0].pixel_coordinates_.y(), it_per_frame.pixel_coordinates_.y());
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
                 /*
                 double **para = new double *[5];
@@ -887,9 +887,9 @@ void Estimator::Optimization()
                     Vector3d pts_j = it_per_frame.point;
                     if (ESTIMATE_TD)
                     {
-                        ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocity,
-                                                                          it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
-                                                                          it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
+                        ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].pixel_velocity_, it_per_frame.pixel_velocity_,
+                                                                          it_per_id.feature_per_frame[0].imu_camera_clock_offset_current_, it_per_frame.imu_camera_clock_offset_current_,
+                                                                          it_per_id.feature_per_frame[0].pixel_coordinates_.y(), it_per_frame.pixel_coordinates_.y());
                         ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f_td, loss_function,
                                                                                        vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]},
                                                                                        vector<int>{0, 3});
@@ -1252,8 +1252,8 @@ void Estimator::UpdateKeyframePointClouds(std::vector<Eigen::Vector3d> &out_poin
 
             feature_match.push_back(it_per_id.feature_per_frame[imu_j].point.x());
             feature_match.push_back(it_per_id.feature_per_frame[imu_j].point.y());
-            feature_match.push_back(it_per_id.feature_per_frame[imu_j].uv.x());
-            feature_match.push_back(it_per_id.feature_per_frame[imu_j].uv.y());
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].pixel_coordinates_.x());
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].pixel_coordinates_.y());
             feature_match.push_back(it_per_id.feature_id);
             feature_2d_3d_matches.push_back(feature_match);
         }

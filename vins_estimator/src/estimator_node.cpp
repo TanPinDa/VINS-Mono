@@ -15,7 +15,6 @@
 #include "parameters_ros.h"
 #include "utility/visualization.h"
 
-
 void updateCurrentOrientation(const Eigen::Vector3d &imu_angular_velocity_current,
                               const Eigen::Vector3d &imu_angular_velocity_previous,
                               const Eigen::Vector3d &imu_angular_velocity_bias,
@@ -112,17 +111,17 @@ private:
                                     imu_msg->angular_velocity.y,
                                     imu_msg->angular_velocity.z};
 
-    updateCurrentOrientation(angular_velocity_previous, angular_velocity_current, imu_angular_velocity_estimated_bias, orientation_estimated_previous, dt, orientation_estimated_current);
-    updateCurrentPositionAndVelocity(linear_acceleration_previous,
-                                     linear_acceleration_current,
-                                     orientation_estimated_previous,
-                                     orientation_estimated_current,
-                                     imu_linear_acceleration_estimated_bias,
-                                     estimator_.gravity_,
-                                     dt,
-                                     position_estimated_current,
-                                     linear_velocity_estimated_current);
-}
+        updateCurrentOrientation(angular_velocity_previous, angular_velocity_current, imu_angular_velocity_estimated_bias, orientation_estimated_previous, dt, orientation_estimated_current);
+        updateCurrentPositionAndVelocity(linear_acceleration_previous,
+                                         linear_acceleration_current,
+                                         orientation_estimated_previous,
+                                         orientation_estimated_current,
+                                         imu_linear_acceleration_estimated_bias,
+                                         estimator_.gravity_,
+                                         dt,
+                                         position_estimated_current,
+                                         linear_velocity_estimated_current);
+    }
 
     void Update()
     {
@@ -259,7 +258,7 @@ private:
             m_estimator.lock();
             for (auto &measurement : measurements)
             {
-                auto img_msg = measurement.second;
+                sensor_msgs::PointCloudConstPtr img_msg = measurement.second;
                 double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
                 for (auto &imu_msg : measurement.first)
                 {
@@ -334,6 +333,14 @@ private:
                 map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
                 for (unsigned int i = 0; i < img_msg->points.size(); i++)
                 {
+
+                    /*
+                    channels[0] = feature_id
+                    channels[1] = u coordinate of feature in image plane
+                    channels[2] = v coordinate of feature in image plane
+                    channels[3] = x Velocity of feature as obtained by feature track. Likely in image space
+                    channels[4] = y Velocity of feature as obtained by feature track. Likely in image space
+                    */
                     int v = img_msg->channels[0].values[i] + 0.5;
                     int feature_id = v / NUM_OF_CAM;
                     int camera_id = v % NUM_OF_CAM;
