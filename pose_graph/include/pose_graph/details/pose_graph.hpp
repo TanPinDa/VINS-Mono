@@ -28,6 +28,7 @@ struct PoseGraphConfig {
   std::string vocabulary_path = "";
   std::string saved_pose_graph_dir = "";
   bool save_debug_image = false;
+  bool fast_relocalization = false;
 };
 
 class PoseGraph {
@@ -50,6 +51,7 @@ class PoseGraph {
   void Save();
   void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
   void LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
+  void UpdateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1>& loop_info);
   int GetCurrentSequenceCount() const;
   Drift GetDrift() const;
 
