@@ -1183,6 +1183,51 @@ void Estimator::UpdateKeyPoses(vector<Vector3d> out_key_poses) const
 {
 
     out_key_poses = key_poses;
-    
+}
+void Estimator::UpdateCameraPoseInWorldFrame(Eigen::Vector3d &out_position, Eigen::Matrix3d &out_orientation) const
+{
+    // Update camera pose w.r.t world frame
+    // NOTE: Overe here we use  latest imu data but the original code instead used the second latest. Unaware if this is intentional or just a typo
+    out_position = positions_[WINDOW_SIZE] + orientations_[WINDOW_SIZE] * translation_cameras_to_imu_[0];
+
+    // This there assumes that there is only one camera to publish, and it is the first one.
+    out_orientation = orientations_[WINDOW_SIZE] * Quaterniond(rotation_cameras_to_imu_[0]);
+}
+
+void Estimator::UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const
+{
+    for (auto &it_per_id : f_manager.feature)
+    {
+        int used_num;
+        used_num = it_per_id.feature_per_frame.size();
+        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+        if (it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id.solve_flag != 1)
+            continue;
+        int imu_i = it_per_id.start_frame;
+        Eigen::Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+        Eigen::Vector3d w_pts_i = orientations_[imu_i] * (rotation_cameras_to_imu_[0] * pts_i + translation_cameras_to_imu_[0]) + positions_[imu_i];
+        out_point_clouds.push_back(w_pts_i);
+    }
+}
+
+void Estimator::UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const
+{
+
+
+    for (auto &it_per_id : f_manager.feature)
+    {
+        int used_num;
+        used_num = it_per_id.feature_per_frame.size();
+        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+        if (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 && it_per_id.solve_flag == 1)
+        {
+            int imu_i = it_per_id.start_frame;
+            Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+            Vector3d w_pts_i = orientations_[imu_i] * (rotation_cameras_to_imu_[0] * pts_i + translation_cameras_to_imu_[0]) + positions_[imu_i];
+            out_point_clouds.push_back(w_pts_i);
+        }
+    }
 
 }

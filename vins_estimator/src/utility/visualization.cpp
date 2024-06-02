@@ -102,6 +102,9 @@ void EstimatorPublisher::printStatistics(const double &imu_camera_clock_offset, 
 void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::Header &header, const double &compute_time)
 {
 
+    std::vector<Eigen::Vector3d> point_clouds;
+    std::vector<Eigen::Vector3d> marginalised_point_clouds;
+
     estimator.GetLastestEstiamtedStates(position_estimated_current_,
                                         orientation_estimated_current_,
                                         linear_velocity_estimated_current_,
@@ -111,23 +114,19 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
     imu_camera_clock_offset_ = estimator.GetImuCameraClockOffset();
     estimator.UpdateCameraImuTransform(translation_cameras_to_imu_, rotation_cameras_to_imu_);
     estimator.UpdateDriftCorrectionData(drift_correction_translation_, drift_correction_rotation_);
+    estimator.UpdatePointClouds(point_clouds);
+    estimator.UpdateMarginedPointClouds(marginalised_point_clouds);
 
-    // Update camera pose w.r.t world frame
-    // NOTE: Overe here we use  latest imu data but the original code instead used the second latest. Unaware if this is intentional or just a typo
-    camera_position_in_world_frame_ = position_estimated_current_ + orientation_estimated_current_ * translation_cameras_to_imu_[0];
-
-    // This there assumes that there is only one camera to publish, and it is the first one.
-    camera_orientation_in_world_frame_ = orientation_estimated_current_ * Quaterniond(rotation_cameras_to_imu_[0]);
-
-    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
         printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
         pubOdometry(position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, drift_correction_translation_, drift_correction_rotation_, header);
         pubCameraPose(camera_position_in_world_frame_, Quaterniond(camera_orientation_in_world_frame_), header);
+        pubPointCloud(point_clouds, marginalised_point_clouds,header);
     }
     pubKeyPoses(key_poses_, header);
 
-    pubPointCloud(estimator, header);
+    
     pubTF(estimator, header);
     pubKeyframe(estimator);
 }
@@ -242,57 +241,30 @@ void EstimatorPublisher::pubCameraPose(const Vector3d &camera_position, const Ei
     cameraposevisual.add_pose(camera_position, camera_orientation);
     cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);
 }
-void EstimatorPublisher::pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
+void EstimatorPublisher::pubPointCloud(const std::vector<Eigen::Vector3d> &point_clouds, const std::vector<Eigen::Vector3d> &margined_point_clouds, const std_msgs::Header &header)
 {
-    sensor_msgs::PointCloud point_cloud, loop_point_cloud;
+    sensor_msgs::PointCloud point_cloud;
     point_cloud.header = header;
-    loop_point_cloud.header = header;
-
-    for (auto &it_per_id : estimator.f_manager.feature)
+    for (Eigen::Vector3d point : point_clouds)
     {
-        int used_num;
-        used_num = it_per_id.feature_per_frame.size();
-        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
-            continue;
-        if (it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id.solve_flag != 1)
-            continue;
-        int imu_i = it_per_id.start_frame;
-        Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-        Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.rotation_cameras_to_imu_[0] * pts_i + estimator.translation_cameras_to_imu_[0]) + estimator.positions_[imu_i];
-
         geometry_msgs::Point32 p;
-        p.x = w_pts_i(0);
-        p.y = w_pts_i(1);
-        p.z = w_pts_i(2);
+        p.x = point.x();
+        p.y = point.y();
+        p.z = point.z();
         point_cloud.points.push_back(p);
     }
     pub_point_cloud.publish(point_cloud);
 
-    // pub margined potin
+    // pub margined points
     sensor_msgs::PointCloud margin_cloud;
     margin_cloud.header = header;
-
-    for (auto &it_per_id : estimator.f_manager.feature)
+    for (Eigen::Vector3d point : margined_point_clouds)
     {
-        int used_num;
-        used_num = it_per_id.feature_per_frame.size();
-        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
-            continue;
-        // if (it_per_id->start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id->solve_flag != 1)
-        //         continue;
-
-        if (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 && it_per_id.solve_flag == 1)
-        {
-            int imu_i = it_per_id.start_frame;
-            Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-            Vector3d w_pts_i = estimator.orientations_[imu_i] * (estimator.rotation_cameras_to_imu_[0] * pts_i + estimator.translation_cameras_to_imu_[0]) + estimator.positions_[imu_i];
-
-            geometry_msgs::Point32 p;
-            p.x = w_pts_i(0);
-            p.y = w_pts_i(1);
-            p.z = w_pts_i(2);
-            margin_cloud.points.push_back(p);
-        }
+        geometry_msgs::Point32 p;
+        p.x = point.x();
+        p.y = point.y();
+        p.z = point.z();
+        margin_cloud.points.push_back(p);
     }
     pub_margin_cloud.publish(margin_cloud);
 }

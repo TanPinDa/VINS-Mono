@@ -159,4 +159,7 @@ public:
     void UpdateDriftCorrectionData(Eigen::Vector3d &out_drift_correct_translationMatrix3d, Eigen::Matrix3d &out_drift_correction_rotation) const;
 
     void UpdateKeyPoses(vector<Vector3d> out_key_poses) const;
+    void UpdateCameraPoseInWorldFrame(Eigen::Vector3d &out_position, Eigen::Matrix3d &out_orientation) const;
+    void UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const;
+    void UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const;
 };

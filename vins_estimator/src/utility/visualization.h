@@ -44,7 +44,7 @@ private:
 
     void pubCameraPose(const Vector3d &camera_position, const Eigen::Quaterniond &camera_orientation, const std_msgs::Header &header);
 
-    void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
+    void pubPointCloud(const std::vector<Eigen::Vector3d> &point_clouds, const std::vector<Eigen::Vector3d> &margined_point_clouds, const std_msgs::Header &header);
 
     void pubTF(const Estimator &estimator, const std_msgs::Header &header);
 
