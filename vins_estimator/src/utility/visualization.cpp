@@ -117,17 +117,17 @@ void EstimatorPublisher::PublishAll(const Estimator &estimator, const std_msgs::
     estimator.UpdatePointClouds(point_clouds);
     estimator.UpdateMarginedPointClouds(marginalised_point_clouds);
 
-        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
     {
         printStatistics(imu_camera_clock_offset_, translation_cameras_to_imu_, rotation_cameras_to_imu_, position_estimated_current_, linear_velocity_estimated_current_, compute_time);
         pubOdometry(position_estimated_current_, orientation_estimated_current_, linear_velocity_estimated_current_, drift_correction_translation_, drift_correction_rotation_, header);
         pubCameraPose(camera_position_in_world_frame_, Quaterniond(camera_orientation_in_world_frame_), header);
-        pubPointCloud(point_clouds, marginalised_point_clouds,header);
+        pubPointCloud(point_clouds, marginalised_point_clouds, header);
+        pubTF (position_estimated_current_,
+              orientation_estimated_current_, translation_cameras_to_imu_[0], Quaterniond(rotation_cameras_to_imu_[0]), header);
     }
     pubKeyPoses(key_poses_, header);
 
-    
-    pubTF(estimator, header);
     pubKeyframe(estimator);
 }
 void EstimatorPublisher::UpdatePoseMessage(geometry_msgs::Pose &pose_msg, const Vector3d &position, const Eigen::Quaterniond &orientation)
@@ -147,7 +147,7 @@ void EstimatorPublisher::UpdateTwistMessage(geometry_msgs::Twist twist_msg, cons
     twist_msg.linear.y = velocity.y();
     twist_msg.linear.z = velocity.z();
 }
-void EstimatorPublisher::pubOdometry(const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity,
+void EstimatorPublisher::pubOdometry(const Vector3d &position, const Eigen::Quaterniond &orientation, const Vector3d &linear_velocity,
                                      const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header)
 {
 
@@ -269,51 +269,43 @@ void EstimatorPublisher::pubPointCloud(const std::vector<Eigen::Vector3d> &point
     pub_margin_cloud.publish(margin_cloud);
 }
 
-void EstimatorPublisher::pubTF(const Estimator &estimator, const std_msgs::Header &header)
+void EstimatorPublisher::pubTF(const Eigen::Vector3d &position,
+                               const Eigen::Quaterniond &orientation,
+                               const Eigen::Vector3d &translation_camera_to_imu,
+                               const Eigen::Quaterniond &rotation_camera_to_imu,
+                               const std_msgs::Header &header)
 {
-    if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
-        return;
+
     static tf::TransformBroadcaster br;
     tf::Transform transform;
     tf::Quaternion q;
     // body frame
-    Vector3d correct_t;
-    Quaterniond correct_q;
-    correct_t = estimator.positions_[WINDOW_SIZE];
-    correct_q = estimator.orientations_[WINDOW_SIZE];
 
-    transform.setOrigin(tf::Vector3(correct_t(0),
-                                    correct_t(1),
-                                    correct_t(2)));
-    q.setW(correct_q.w());
-    q.setX(correct_q.x());
-    q.setY(correct_q.y());
-    q.setZ(correct_q.z());
+    transform.setOrigin(tf::Vector3(position.x(),
+                                    position.y(),
+                                    position.z()));
+    q.setW(orientation.w());
+    q.setX(orientation.x());
+    q.setY(orientation.y());
+    q.setZ(orientation.z());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, header.stamp, "world", "body"));
 
     // camera frame
-    transform.setOrigin(tf::Vector3(estimator.translation_cameras_to_imu_[0].x(),
-                                    estimator.translation_cameras_to_imu_[0].y(),
-                                    estimator.translation_cameras_to_imu_[0].z()));
-    q.setW(Quaterniond(estimator.rotation_cameras_to_imu_[0]).w());
-    q.setX(Quaterniond(estimator.rotation_cameras_to_imu_[0]).x());
-    q.setY(Quaterniond(estimator.rotation_cameras_to_imu_[0]).y());
-    q.setZ(Quaterniond(estimator.rotation_cameras_to_imu_[0]).z());
+    transform.setOrigin(tf::Vector3(translation_camera_to_imu.x(),
+                                    translation_camera_to_imu.y(),
+                                    translation_camera_to_imu.z()));
+    q.setW(rotation_camera_to_imu.w());
+    q.setX(rotation_camera_to_imu.x());
+    q.setY(rotation_camera_to_imu.y());
+    q.setZ(rotation_camera_to_imu.z());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, header.stamp, "body", "camera"));
 
     nav_msgs::Odometry odometry;
     odometry.header = header;
     odometry.header.frame_id = "world";
-    odometry.pose.pose.position.x = estimator.translation_cameras_to_imu_[0].x();
-    odometry.pose.pose.position.y = estimator.translation_cameras_to_imu_[0].y();
-    odometry.pose.pose.position.z = estimator.translation_cameras_to_imu_[0].z();
-    Quaterniond tmp_q{estimator.rotation_cameras_to_imu_[0]};
-    odometry.pose.pose.orientation.x = tmp_q.x();
-    odometry.pose.pose.orientation.y = tmp_q.y();
-    odometry.pose.pose.orientation.z = tmp_q.z();
-    odometry.pose.pose.orientation.w = tmp_q.w();
+    UpdatePoseMessage(odometry.pose.pose, translation_camera_to_imu, rotation_camera_to_imu);
     pub_extrinsic.publish(odometry);
 }
 

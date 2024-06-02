@@ -37,8 +37,8 @@ public:
 private:
     void printStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time);
 
-    void pubOdometry(const Vector3d &position, const Eigen::Quaterniond orientation, const Vector3d &linear_velocity,
-                                const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header);
+    void pubOdometry(const Vector3d &position, const Eigen::Quaterniond &orientation, const Vector3d &linear_velocity,
+                     const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header);
 
     void pubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header);
 
@@ -46,7 +46,11 @@ private:
 
     void pubPointCloud(const std::vector<Eigen::Vector3d> &point_clouds, const std::vector<Eigen::Vector3d> &margined_point_clouds, const std_msgs::Header &header);
 
-    void pubTF(const Estimator &estimator, const std_msgs::Header &header);
+    void pubTF(const Eigen::Vector3d &position,
+               const Eigen::Quaterniond &orientation,
+               const Eigen::Vector3d &translation_camera_to_imu,
+               const Eigen::Quaterniond &rotation_camera_to_imu,
+               const std_msgs::Header &header);
 
     void pubKeyframe(const Estimator &estimator);
 
