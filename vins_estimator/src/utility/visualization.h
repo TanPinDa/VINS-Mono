@@ -52,7 +52,10 @@ private:
                const Eigen::Quaterniond &rotation_camera_to_imu,
                const std_msgs::Header &header);
 
-    void pubKeyframe(const Estimator &estimator);
+    void pubKeyframe(const Eigen::Vector3d &position,
+                     const Eigen::Quaterniond &orientation,
+                     const std::vector<Eigen::Vector3d> &point_clouds,
+                     std::vector<std::vector<float>> &feature_2d_3d_matches, const double &timestamp_2_back);
 
     void UpdatePoseMessage(geometry_msgs::Pose &pose_msg, const Vector3d &position, const Eigen::Quaterniond &orientation);
     void UpdateTwistMessage(geometry_msgs::Twist twist_msg, const Eigen::Vector3d &velocity);
@@ -102,5 +105,4 @@ private:
     Eigen::Matrix3d camera_orientation_in_world_frame_;
     // ROS msgs
     visualization_msgs::Marker key_poses_msg_;
-
 };

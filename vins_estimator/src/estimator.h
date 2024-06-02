@@ -162,4 +162,8 @@ public:
     void UpdateCameraPoseInWorldFrame(Eigen::Vector3d &out_position, Eigen::Matrix3d &out_orientation) const;
     void UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const;
     void UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const;
+    void UpdateKeyframePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds,
+                                              std::vector<std::vector<float>> &feature_2d_3d_matches) const;
+
+    double GetTimestamp(const int &index) const;
 };

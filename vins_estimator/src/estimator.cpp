@@ -1214,7 +1214,6 @@ void Estimator::UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds
 void Estimator::UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const
 {
 
-
     for (auto &it_per_id : f_manager.feature)
     {
         int used_num;
@@ -1229,5 +1228,39 @@ void Estimator::UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_poin
             out_point_clouds.push_back(w_pts_i);
         }
     }
+}
 
+void Estimator::UpdateKeyframePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds,
+                                          std::vector<std::vector<float>> &feature_2d_3d_matches) const
+{
+
+    for (auto &it_per_id : f_manager.feature)
+    {
+
+        int frame_size = it_per_id.feature_per_frame.size();
+
+        if (it_per_id.start_frame < WINDOW_SIZE - 2 && it_per_id.start_frame + frame_size - 1 >= WINDOW_SIZE - 2 && it_per_id.solve_flag == 1)
+        {
+            int imu_i = it_per_id.start_frame;
+            int imu_j = WINDOW_SIZE - 2 - it_per_id.start_frame;
+
+            Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+            Vector3d w_pts_i = orientations_[imu_i] * (rotation_cameras_to_imu_[0] * pts_i + translation_cameras_to_imu_[0]) + positions_[imu_i];
+            out_point_clouds.push_back(w_pts_i);
+
+            std::vector<float> feature_match;
+
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].point.x());
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].point.y());
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].uv.x());
+            feature_match.push_back(it_per_id.feature_per_frame[imu_j].uv.y());
+            feature_match.push_back(it_per_id.feature_id);
+            feature_2d_3d_matches.push_back(feature_match);
+        }
+    }
+}
+
+double Estimator::GetTimestamp(const int &index) const
+{
+    return Timestamps[index];
 }
