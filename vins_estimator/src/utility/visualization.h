@@ -35,24 +35,24 @@ public:
     void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
 
 private:
-    void printStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time);
+    void PrintStatistics(const double &imu_camera_clock_offset, const Eigen::Vector3d translation_camera_to_imu[], const Matrix3d rotation_camera_to_imu[], const Vector3d &position, const Vector3d &linear_velocity, const double &compute_time);
 
-    void pubOdometry(const Vector3d &position, const Eigen::Quaterniond &orientation, const Vector3d &linear_velocity,
+    void PubOdometry(const Vector3d &position, const Eigen::Quaterniond &orientation, const Vector3d &linear_velocity,
                      const Vector3d &drift_correction_translation, const Matrix3d &drift_correction_rotation, const std_msgs::Header &header);
 
-    void pubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header);
+    void PubKeyPoses(const vector<Vector3d> &key_poses, const std_msgs::Header &header);
 
-    void pubCameraPose(const Vector3d &camera_position, const Eigen::Quaterniond &camera_orientation, const std_msgs::Header &header);
+    void PubCameraPose(const Vector3d &camera_position, const Eigen::Quaterniond &camera_orientation, const std_msgs::Header &header);
 
-    void pubPointCloud(const std::vector<Eigen::Vector3d> &point_clouds, const std::vector<Eigen::Vector3d> &margined_point_clouds, const std_msgs::Header &header);
+    void PubPointCloud(const std::vector<Eigen::Vector3d> &point_clouds, const std::vector<Eigen::Vector3d> &margined_point_clouds, const std_msgs::Header &header);
 
-    void pubTF(const Eigen::Vector3d &position,
+    void PubTF(const Eigen::Vector3d &position,
                const Eigen::Quaterniond &orientation,
                const Eigen::Vector3d &translation_camera_to_imu,
                const Eigen::Quaterniond &rotation_camera_to_imu,
                const std_msgs::Header &header);
 
-    void pubKeyframe(const Eigen::Vector3d &position,
+    void PubKeyframe(const Eigen::Vector3d &position,
                      const Eigen::Quaterniond &orientation,
                      const std::vector<Eigen::Vector3d> &point_clouds,
                      std::vector<std::vector<float>> &feature_2d_3d_matches, const double &timestamp_2_back);
@@ -60,22 +60,22 @@ private:
     void UpdatePoseMessage(geometry_msgs::Pose &pose_msg, const Vector3d &position, const Eigen::Quaterniond &orientation);
     void UpdateTwistMessage(geometry_msgs::Twist twist_msg, const Eigen::Vector3d &velocity);
 
-    CameraPoseVisualization cameraposevisual;
-    CameraPoseVisualization keyframebasevisual;
-    ros::Publisher pub_odometry, pub_latest_odometry;
-    ros::Publisher pub_path, pub_relo_path;
-    ros::Publisher pub_point_cloud, pub_margin_cloud;
-    ros::Publisher pub_key_poses;
-    ros::Publisher pub_relo_relative_pose;
-    ros::Publisher pub_camera_pose;
-    ros::Publisher pub_camera_pose_visual;
-    nav_msgs::Path path, relo_path;
-    ros::Publisher pub_keyframe_pose;
-    ros::Publisher pub_keyframe_point;
-    ros::Publisher pub_extrinsic;
-    double sum_of_path;
+    CameraPoseVisualization caemra_pose_visualization_;
+    CameraPoseVisualization keyframe_base_visualization_;
 
-    Vector3d last_path;
+    ros::Publisher pub_odometry_, pub_latest_odometry_;
+    ros::Publisher pub_path_, pub_relo_path_;
+    ros::Publisher pub_point_cloud_, pub_margin_cloud_;
+    ros::Publisher pub_key_poses_;
+    ros::Publisher pub_relo_relative_pose_;
+    ros::Publisher pub_camera_pose_;
+    ros::Publisher pub_camera_pose_visual_;
+    ros::Publisher pub_keyframe_pose_;
+    ros::Publisher pub_keyframe_point_;
+    ros::Publisher pub_extrinsic_;
+
+    double sum_of_path_;
+    Vector3d last_path_;
 
     // State Variables
     Eigen::Vector3d position_estimated_current_;
@@ -105,4 +105,5 @@ private:
     Eigen::Matrix3d camera_orientation_in_world_frame_;
     // ROS msgs
     visualization_msgs::Marker key_poses_msg_;
+    nav_msgs::Path path_msg_, relo_path_msg_;
 };
