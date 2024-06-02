@@ -8,8 +8,9 @@
 
 #include "pose_graph/details/pose_graph.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <fstream>
-#include <vector>
 
 #include <ceres/ceres.h>
 
@@ -367,12 +368,150 @@ void PoseGraph::Save() {
   printf("pose graph saved, time cost: %f s\n", clock.toc() / 1000);
 }
 
-void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_kf) {
-  // Add keyframe to the pose graph
+void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
+  // shift to base frame
+  Vector3d vio_current_position;
+  ;
+  Matrix3d vio_current_rotation;
+  if (current_sequence_count_ != current_keyframe->sequence) {
+    current_sequence_count_++;
+    sequence_loop_flags_.push_back(false);
+    world_vio_.translation = Eigen::Vector3d(0, 0, 0);
+    world_vio_.rotation = Eigen::Matrix3d::Identity();
+    {
+      std::lock_guard<std::mutex> lock(drift_mutex_);
+      drift_.translation = Eigen::Vector3d(0, 0, 0);
+      drift_.rotation = Eigen::Matrix3d::Identity();
+    }
+  }
+
+  current_keyframe->getVioPose(vio_current_position, vio_current_rotation);
+  vio_current_position =
+      world_vio_.rotation * vio_current_position + world_vio_.translation;
+  vio_current_rotation = world_vio_.rotation * vio_current_rotation;
+  current_keyframe->updateVioPose(vio_current_position, vio_current_rotation);
+  // Assign the current global_keyframe_index_counter_, then increment it
+  current_keyframe->index = global_keyframe_index_counter_++;
+  int loop_index = -1;
+  if (config_.detect_loop_closure) {
+    loop_index = DetectLoopClosure(current_keyframe);
+  } else {
+    AddKeyFrameIntoVoc(current_keyframe);
+  }
+
+  if (loop_index != -1) {
+    auto old_keyframe = GetKeyFrame(loop_index);
+    if (!old_keyframe) {
+      throw std::runtime_error("AddKeyFrame(): loop index not found");
+    }
+    std::vector<cv::Point2f> matched_2d_old_norm;
+    std::vector<double> matched_id;
+    if (current_keyframe->findConnection(old_keyframe.get(),
+                                         matched_2d_old_norm, matched_id)) {
+      if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
+        earliest_loop_index = loop_index;
+      }
+
+      Vector3d old_world_position, current_world_position, current_vio_position;
+      Matrix3d old_world_rotation, current_world_rotation, current_vio_rotation;
+      old_keyframe->getVioPose(old_world_position, old_world_rotation);
+      current_keyframe->getVioPose(current_vio_position, current_vio_rotation);
+
+      Vector3d relative_translation;
+      Quaterniond relative_quarternion;
+      relative_translation = current_keyframe->getLoopRelativeT();
+      relative_quarternion =
+          (current_keyframe->getLoopRelativeQ()).toRotationMatrix();
+      current_world_position =
+          old_world_rotation * relative_translation + old_world_position;
+      current_world_rotation = old_world_rotation * relative_quarternion;
+      double shift_yaw;
+      Matrix3d shift_rotation;
+      Vector3d shift_translation;
+      shift_yaw = Utility::R2ypr(current_world_rotation).x() -
+                  Utility::R2ypr(current_vio_rotation).x();
+      shift_rotation = Utility::ypr2R(Vector3d(shift_yaw, 0, 0));
+      shift_translation =
+          current_world_position - current_world_rotation *
+                                       current_vio_rotation.transpose() *
+                                       current_vio_position;
+      // shift vio pose of whole sequence to the world frame
+      if (old_keyframe->sequence != current_keyframe->sequence &&
+          sequence_loop_flags_[current_keyframe->sequence] == 0) {
+        world_vio_.rotation = shift_rotation;
+        world_vio_.translation = shift_translation;
+        current_vio_position =
+            world_vio_.rotation * current_vio_position + world_vio_.translation;
+        current_vio_rotation = world_vio_.rotation * current_vio_rotation;
+        current_keyframe->updateVioPose(current_vio_position,
+                                        current_vio_rotation);
+        for (auto keyframe : keyframes_) {
+          if (keyframe->sequence == current_keyframe->sequence) {
+            Vector3d current_vio_position;
+            Matrix3d current_vio_rotation;
+            keyframe->getVioPose(current_vio_position, current_vio_rotation);
+            current_vio_position = world_vio_.rotation * current_vio_position +
+                                   world_vio_.translation;
+            current_vio_rotation = world_vio_.rotation * current_vio_rotation;
+            keyframe->updateVioPose(current_vio_position, current_vio_rotation);
+          }
+        }
+        sequence_loop_flags_[current_keyframe->sequence] = 1;
+      }
+      {
+        std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
+        optimize_buf_.push(current_keyframe->index);
+      }
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(keyframes_mutex_);
+    Eigen::Vector3d position;
+    Eigen::Matrix3d rotation;
+    current_keyframe->getVioPose(position, rotation);
+    position = drift_.rotation * position + drift_.translation;
+    rotation = drift_.rotation * rotation;
+    current_keyframe->updatePose(position, rotation);
+    keyframes_.push_back(current_keyframe);
+  }
 }
 
-void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_kf) {
-  // Load keyframe from the pose graph
+void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
+  // Assign the current global_keyframe_index_counter_, then increment it
+  current_keyframe->index = global_keyframe_index_counter_++;
+  int loop_index = -1;
+  if (config_.detect_loop_closure) {
+    loop_index = DetectLoopClosure(current_keyframe);
+  } else {
+    AddKeyFrameIntoVoc(current_keyframe);
+  }
+
+  if (loop_index != -1) {
+    printf(" %d detected loop closure with %d \n", current_keyframe->index,
+           loop_index);
+    auto old_keyframe = GetKeyFrame(loop_index);
+    if (!old_keyframe) {
+      throw std::runtime_error("LoadKeyFrame(): loop index not found");
+    }
+    std::vector<cv::Point2f> matched_2d_old_norm;
+    std::vector<double> matched_id;
+    if (current_keyframe->findConnection(old_keyframe.get(),
+                                         matched_2d_old_norm, matched_id)) {
+      if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
+        earliest_loop_index = loop_index;
+      }
+      {
+        std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
+        optimize_buf_.push(current_keyframe->index);
+      }
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(keyframes_mutex_);
+    keyframes_.push_back(current_keyframe);
+  }
 }
 
 int PoseGraph::GetCurrentSequenceCount() const {
@@ -381,9 +520,83 @@ int PoseGraph::GetCurrentSequenceCount() const {
 
 PoseGraph::Drift PoseGraph::GetDrift() const { return drift_; }
 
-int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_kf) {
-  // Detect loop closure
-  return -1;
+int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe) {
+  // Add image to pool for visualization
+  cv::Mat compressed_image;
+  if (config_.save_debug_image) {
+    int feature_num = current_keyframe->keypoints.size();
+    cv::resize(current_keyframe->image, compressed_image, cv::Size(376, 240));
+    cv::putText(compressed_image, "Feature Num: " + std::to_string(feature_num),
+                cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
+                cv::Scalar(255));
+    image_pool_[current_keyframe->index] = compressed_image;
+  }
+
+  DBoW2::QueryResults ret;
+  db_.query(current_keyframe->brief_descriptors, ret, 4,
+            current_keyframe->index - 50);
+  db_.add(current_keyframe->brief_descriptors);
+
+  bool loop_detected = false;
+  if (config_.save_debug_image) {
+    // NOTE: loop_result seems to be unused
+    cv::Mat loop_result;
+    loop_result = compressed_image.clone();
+    if (ret.size() > 0) {
+      putText(loop_result, "neighbour score:" + to_string(ret[0].Score),
+              cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+              cv::Scalar(255));
+    }
+
+    for (unsigned int i = 0; i < ret.size(); i++) {
+      int tmp_index = ret[i].Id;
+      auto it = image_pool_.find(tmp_index);
+      cv::Mat tmp_image = (it->second).clone();
+      cv::putText(tmp_image,
+                  "index:  " + to_string(tmp_index) +
+                      "loop score:" + to_string(ret[i].Score),
+                  cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                  cv::Scalar(255));
+      cv::hconcat(loop_result, tmp_image, loop_result);
+    }
+  }
+
+  // a good match with its nerghbour
+  if (ret.size() >= 1 && ret[0].Score > 0.05) {
+    for (unsigned int i = 1; i < ret.size(); i++) {
+      // if (ret[i].Score > ret[0].Score * 0.3)
+      if (ret[i].Score > 0.015) {
+        loop_detected = true;
+        int tmp_index = ret[i].Id;
+      }
+    }
+  }
+
+  if (loop_detected && current_keyframe->index > 50) {
+    int min_index = -1;
+    for (unsigned int i = 0; i < ret.size(); i++) {
+      if (min_index == -1 || (ret[i].Id < min_index && ret[i].Score > 0.015))
+        min_index = ret[i].Id;
+    }
+    return min_index;
+  } else {
+    return -1;
+  }
+}
+
+std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index) {
+  // TODO for Kee Jin: Check if a mutex is needed here to access keyframes_
+
+  // Get keyframe from the pose graph
+  auto it = std::find_if(keyframes_.begin(), keyframes_.end(),
+                         [index](const std::shared_ptr<KeyFrame>& kf) {
+                           return kf->index == index;
+                         });
+
+  if (it != keyframes_.end())
+    return *it;
+  else
+    return nullptr;
 }
 
 void PoseGraph::LoadVocabulary() {
@@ -392,12 +605,193 @@ void PoseGraph::LoadVocabulary() {
   db_.setVocabulary(*vocabulary_);
 }
 
-void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe,
-                                   int frame_index) {
-  // Add keyframe into vocabulary
+void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe) {
+  // add image into image_pool for visualization
+  if (config_.save_debug_image) {
+    cv::Mat compressed_image;
+    int feature_num = keyframe->keypoints.size();
+    cv::resize(keyframe->image, compressed_image, cv::Size(376, 240));
+    putText(compressed_image, "feature_num:" + to_string(feature_num),
+            cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
+            cv::Scalar(255));
+    image_pool_[keyframe->index] = compressed_image;
+  }
+
+  db_.add(keyframe->brief_descriptors);
 }
 
 void PoseGraph::Optimize4DoF() {
-  // Optimize 4 degrees of freedom
+  int current_index = -1;
+  int first_looped_index = -1;
+  {
+    std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
+    while (!optimize_buf_.empty()) {
+      current_index = optimize_buf_.front();
+      first_looped_index = earliest_loop_index;
+      optimize_buf_.pop();
+    }
+  }
+  if (current_index != -1) {
+    printf("optimize pose graph \n");
+    ceres::Problem problem;
+    int i = 0;
+    list<std::shared_ptr<KeyFrame>>::iterator it;
+    int max_length = current_index + 1;
+
+    // w^t_i   w^q_i
+    double translation_array[max_length][3];
+    Quaterniond quarternion_array[max_length];
+    double euler_array[max_length][3];
+    double sequence_array[max_length];
+    std::shared_ptr<KeyFrame> current_keyframe;
+
+    {
+      std::lock_guard<std::mutex> lock(keyframes_mutex_);
+      current_keyframe = GetKeyFrame(current_index);
+      if (!current_keyframe) {
+        throw std::runtime_error("Optimize4DoF(): current keyframe not found");
+      }
+
+      ceres::LossFunction* loss_function;
+      loss_function = new ceres::HuberLoss(0.1);
+      // loss_function = new ceres::CauchyLoss(1.0);
+      ceres::Manifold* angle_manifold =
+          new ceres::AutoDiffManifold<AngleManifoldFunctor, 1, 1>;
+
+      for (it = keyframes_.begin(); it != keyframes_.end(); it++) {
+        if ((*it)->index < first_looped_index) continue;
+        (*it)->local_index = i;
+        Quaterniond tmp_q;
+        Matrix3d tmp_r;
+        Vector3d tmp_t;
+        (*it)->getVioPose(tmp_t, tmp_r);
+        tmp_q = tmp_r;
+        translation_array[i][0] = tmp_t(0);
+        translation_array[i][1] = tmp_t(1);
+        translation_array[i][2] = tmp_t(2);
+        quarternion_array[i] = tmp_q;
+
+        Vector3d euler_angle = Utility::R2ypr(tmp_q.toRotationMatrix());
+        euler_array[i][0] = euler_angle.x();
+        euler_array[i][1] = euler_angle.y();
+        euler_array[i][2] = euler_angle.z();
+
+        sequence_array[i] = (*it)->sequence;
+
+        problem.AddParameterBlock(euler_array[i], 1, angle_manifold);
+        problem.AddParameterBlock(translation_array[i], 3);
+
+        if ((*it)->index == first_looped_index || (*it)->sequence == 0) {
+          problem.SetParameterBlockConstant(euler_array[i]);
+          problem.SetParameterBlockConstant(translation_array[i]);
+        }
+
+        // add edge
+        for (int j = 1; j < 5; j++) {
+          if (i - j >= 0 && sequence_array[i] == sequence_array[i - j]) {
+            Vector3d euler_conncected =
+                Utility::R2ypr(quarternion_array[i - j].toRotationMatrix());
+            Vector3d relative_t(
+                translation_array[i][0] - translation_array[i - j][0],
+                translation_array[i][1] - translation_array[i - j][1],
+                translation_array[i][2] - translation_array[i - j][2]);
+            relative_t = quarternion_array[i - j].inverse() * relative_t;
+            double relative_yaw = euler_array[i][0] - euler_array[i - j][0];
+            ceres::CostFunction* cost_function = FourDOFError::Create(
+                relative_t.x(), relative_t.y(), relative_t.z(), relative_yaw,
+                euler_conncected.y(), euler_conncected.z());
+            problem.AddResidualBlock(cost_function, NULL, euler_array[i - j],
+                                     translation_array[i - j], euler_array[i],
+                                     translation_array[i]);
+          }
+        }
+
+        // add loop edge
+
+        if ((*it)->has_loop) {
+          assert((*it)->loop_index >= first_looped_index);
+          int connected_index = GetKeyFrame((*it)->loop_index)->local_index;
+          Vector3d euler_conncected = Utility::R2ypr(
+              quarternion_array[connected_index].toRotationMatrix());
+          Vector3d relative_t;
+          relative_t = (*it)->getLoopRelativeT();
+          double relative_yaw = (*it)->getLoopRelativeYaw();
+          ceres::CostFunction* cost_function = FourDOFWeightError::Create(
+              relative_t.x(), relative_t.y(), relative_t.z(), relative_yaw,
+              euler_conncected.y(), euler_conncected.z());
+          problem.AddResidualBlock(cost_function, loss_function,
+                                   euler_array[connected_index],
+                                   translation_array[connected_index],
+                                   euler_array[i], translation_array[i]);
+        }
+
+        if ((*it)->index == current_index) break;
+        i++;
+      }
+    }
+
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    // options.minimizer_progress_to_stdout = true;
+    // options.max_solver_time_in_seconds = SOLVER_TIME * 3;
+    options.max_num_iterations = 5;
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    // std::cout << summary.BriefReport() << "\n";
+
+    // printf("pose optimization time: %f \n", tmp_t.toc());
+    /*
+    for (int j = 0 ; j < i; j++)
+    {
+        printf("optimize i: %d p: %f, %f, %f\n", j, translation_array[j][0],
+    translation_array[j][1], translation_array[j][2] );
+    }
+    */
+    {
+      std::lock_guard<std::mutex> lock(keyframes_mutex_);
+      i = 0;
+      for (it = keyframes_.begin(); it != keyframes_.end(); it++) {
+        if ((*it)->index < first_looped_index) continue;
+        Quaterniond tmp_q;
+        tmp_q = Utility::ypr2R(
+            Vector3d(euler_array[i][0], euler_array[i][1], euler_array[i][2]));
+        Vector3d tmp_t =
+            Vector3d(translation_array[i][0], translation_array[i][1],
+                     translation_array[i][2]);
+        Matrix3d tmp_r = tmp_q.toRotationMatrix();
+        (*it)->updatePose(tmp_t, tmp_r);
+
+        if ((*it)->index == current_index) break;
+        i++;
+      }
+
+      Vector3d cur_t, vio_t;
+      Matrix3d cur_r, vio_r;
+      current_keyframe->getPose(cur_t, cur_r);
+      current_keyframe->getVioPose(vio_t, vio_r);
+      {
+        std::lock_guard<std::mutex> lock(drift_mutex_);
+        drift_.yaw = Utility::R2ypr(cur_r).x() - Utility::R2ypr(vio_r).x();
+        drift_.rotation = Utility::ypr2R(Vector3d(drift_.yaw, 0, 0));
+        drift_.translation = cur_t - drift_.rotation * vio_t;
+      }
+      // cout << "t_drift " << drift_.translation.transpose() << endl;
+      // cout << "r_drift " << Utility::R2ypr(drift_.rotation).transpose() <<
+      // endl; cout << "yaw drift " << drift_.yaw << endl;
+
+      it++;
+      for (; it != keyframes_.end(); it++) {
+        Vector3d position;
+        Matrix3d rotation;
+        (*it)->getVioPose(position, rotation);
+        position = drift_.rotation * position + drift_.translation;
+        rotation = drift_.rotation * rotation;
+        (*it)->updatePose(position, rotation);
+      }
+      // updatePath();
+    }
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 }  // namespace pose_graph
