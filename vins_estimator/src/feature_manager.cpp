@@ -1,23 +1,26 @@
 #include "feature_manager.h"
 #include "spdlog/spdlog.h"
 
-int FeaturePerId::endFrame()
+int FeatureOccurrencesAcrossFrames::endFrame()
 {
-    return start_frame + feature_per_frame.size() - 1;
+    return start_frame + matched_features_in_frames.size() - 1;
 }
 
-FeatureManager::FeatureManager(Matrix3d _Rs[])
-    : imu_orientations_wrt_world_(_Rs)
+FeatureManager::FeatureManager(Matrix3d imu_orientations_wrt_world[])
+// TODO: Consider if we want to do this for translation as well, or pass in rotation instead.
+// Likely cleaner to pass in rotation instead of attaching the array like this. Unsure about compute related issues
+
+    : imu_orientations_wrt_world_(imu_orientations_wrt_world)
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
         rotation_of_cameras_to_imu_[i].setIdentity();
 }
 
-void FeatureManager::SetRotationCameraToImu(Matrix3d _ric[])
+void FeatureManager::SetRotationCameraToImu(Matrix3d rotation_of_cameras_to_imu[])
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        rotation_of_cameras_to_imu_[i] = _ric[i];
+        rotation_of_cameras_to_imu_[i] = rotation_of_cameras_to_imu[i];
     }
 }
 
@@ -29,12 +32,12 @@ void FeatureManager::clearState()
 int FeatureManager::getFeatureCount()
 {
     int cnt = 0;
-    for (auto &it : feature)
+    for (FeatureOccurrencesAcrossFrames &feature_track : feature)
     {
 
-        it.used_num = it.feature_per_frame.size();
+        feature_track.used_num = feature_track.matched_features_in_frames.size();
 
-        if (it.used_num >= 2 && it.start_frame < WINDOW_SIZE - 2)
+        if (feature_track.used_num >= 2 && feature_track.start_frame < WINDOW_SIZE - 2)
         {
             cnt++;
         }
@@ -52,22 +55,22 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     last_track_num = 0;
     for (auto &id_pts : image)
     {
-        FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
+        FeatureObservation f_per_fra(id_pts.second[0].second, td);
 
         int feature_id = id_pts.first;
-        auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
+        auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeatureOccurrencesAcrossFrames &it)
                           {
             return it.feature_id == feature_id;
                           });
 
         if (it == feature.end())
         {
-            feature.push_back(FeaturePerId(feature_id, frame_count));
-            feature.back().feature_per_frame.push_back(f_per_fra);
+            feature.push_back(FeatureOccurrencesAcrossFrames(feature_id, frame_count));
+            feature.back().matched_features_in_frames.push_back(f_per_fra);
         }
         else if (it->feature_id == feature_id)
         {
-            it->feature_per_frame.push_back(f_per_fra);
+            it->matched_features_in_frames.push_back(f_per_fra);
             last_track_num++;
         }
     }
@@ -78,7 +81,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     for (auto &it_per_id : feature)
     {
         if (it_per_id.start_frame <= frame_count - 2 &&
-            it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
+            it_per_id.start_frame + int(it_per_id.matched_features_in_frames.size()) - 1 >= frame_count - 1)
         {
             parallax_sum += compensatedParallax2(it_per_id, frame_count);
             parallax_num++;
@@ -102,13 +105,13 @@ void FeatureManager::debugShow()
     spdlog::debug("debug show");
     for (auto &it : feature)
     {
-        assert(it.feature_per_frame.size() != 0);
+        assert(it.matched_features_in_frames.size() != 0);
         assert(it.start_frame >= 0);
         assert(it.used_num >= 0);
 
         spdlog::debug("{0},{1},{2} ", it.feature_id, it.used_num, it.start_frame);
         int sum = 0;
-        for (auto &j : it.feature_per_frame)
+        for (auto &j : it.matched_features_in_frames)
         {
             spdlog::debug("{},", int(j.is_used));
             sum += j.is_used;
@@ -129,9 +132,9 @@ vector<pair<Vector3d, Vector3d>> FeatureManager::getCorresponding(int frame_coun
             int idx_l = frame_count_l - it.start_frame;
             int idx_r = frame_count_r - it.start_frame;
 
-            a = it.feature_per_frame[idx_l].point;
+            a = it.matched_features_in_frames[idx_l].point;
 
-            b = it.feature_per_frame[idx_r].point;
+            b = it.matched_features_in_frames[idx_r].point;
             
             corres.push_back(make_pair(a, b));
         }
@@ -144,7 +147,7 @@ void FeatureManager::setDepth(const VectorXd &x)
     int feature_index = -1;
     for (auto &it_per_id : feature)
     {
-        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 
@@ -175,7 +178,7 @@ void FeatureManager::clearDepth(const VectorXd &x)
     int feature_index = -1;
     for (auto &it_per_id : feature)
     {
-        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
         it_per_id.estimated_depth = 1.0 / x(++feature_index);
@@ -188,7 +191,7 @@ VectorXd FeatureManager::getDepthVector()
     int feature_index = -1;
     for (auto &it_per_id : feature)
     {
-        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 #if 1
@@ -204,7 +207,7 @@ void FeatureManager::triangulate(Vector3d translations_imu_to_world[], Vector3d 
 {
     for (auto &it_per_id : feature)
     {
-        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 
@@ -213,7 +216,7 @@ void FeatureManager::triangulate(Vector3d translations_imu_to_world[], Vector3d 
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
 
         assert(NUM_OF_CAM == 1);
-        Eigen::MatrixXd svd_A(2 * it_per_id.feature_per_frame.size(), 4);
+        Eigen::MatrixXd svd_A(2 * it_per_id.matched_features_in_frames.size(), 4);
         int svd_idx = 0;
 
         Eigen::Matrix<double, 3, 4> P0;
@@ -222,7 +225,7 @@ void FeatureManager::triangulate(Vector3d translations_imu_to_world[], Vector3d 
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();
         P0.rightCols<1>() = Eigen::Vector3d::Zero();
 
-        for (auto &it_per_frame : it_per_id.feature_per_frame)
+        for (auto &it_per_frame : it_per_id.matched_features_in_frames)
         {
             imu_j++;
 
@@ -285,9 +288,9 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
             it->start_frame--;
         else
         {
-            Eigen::Vector3d uv_i = it->feature_per_frame[0].point;  
-            it->feature_per_frame.erase(it->feature_per_frame.begin());
-            if (it->feature_per_frame.size() < 2)
+            Eigen::Vector3d uv_i = it->matched_features_in_frames[0].point;  
+            it->matched_features_in_frames.erase(it->matched_features_in_frames.begin());
+            if (it->matched_features_in_frames.size() < 2)
             {
                 feature.erase(it);
                 continue;
@@ -325,8 +328,8 @@ void FeatureManager::removeBack()
             it->start_frame--;
         else
         {
-            it->feature_per_frame.erase(it->feature_per_frame.begin());
-            if (it->feature_per_frame.size() == 0)
+            it->matched_features_in_frames.erase(it->matched_features_in_frames.begin());
+            if (it->matched_features_in_frames.size() == 0)
                 feature.erase(it);
         }
     }
@@ -347,19 +350,19 @@ void FeatureManager::removeFront(int frame_count)
             int j = WINDOW_SIZE - 1 - it->start_frame;
             if (it->endFrame() < frame_count - 1)
                 continue;
-            it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
-            if (it->feature_per_frame.size() == 0)
+            it->matched_features_in_frames.erase(it->matched_features_in_frames.begin() + j);
+            if (it->matched_features_in_frames.size() == 0)
                 feature.erase(it);
         }
     }
 }
 
-double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count)
+double FeatureManager::compensatedParallax2(const FeatureOccurrencesAcrossFrames &it_per_id, int frame_count)
 {
     //check the second last frame is keyframe or not
     //parallax betwwen seconde last frame and third last frame
-    const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
-    const FeaturePerFrame &frame_j = it_per_id.feature_per_frame[frame_count - 1 - it_per_id.start_frame];
+    const FeatureObservation &frame_i = it_per_id.matched_features_in_frames[frame_count - 2 - it_per_id.start_frame];
+    const FeatureObservation &frame_j = it_per_id.matched_features_in_frames[frame_count - 1 - it_per_id.start_frame];
 
     double ans = 0;
     Vector3d p_j = frame_j.point;
