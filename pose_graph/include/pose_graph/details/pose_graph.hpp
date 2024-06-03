@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include <Eigen/Core>
 #include <opencv2/opencv.hpp>
 
 #include "DBoW/DBoW2.h"
