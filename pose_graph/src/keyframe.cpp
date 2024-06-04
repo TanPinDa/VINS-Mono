@@ -532,6 +532,21 @@ cv::Mat KeyFrame::getThumbImage()
 	return thumbimage_.clone();
 }
 
+KeyFrame::Attributes KeyFrame::getAttributes()
+{
+	KeyFrame::Attributes attr;
+	attr.index = index;
+	attr.time_stamp = time_stamp;
+	attr.sequence = sequence;
+	attr.has_loop = has_loop;
+	attr.loop_index = loop_index;
+	attr.position = T_w_i;
+	attr.rotation = R_w_i;
+	attr.vio_position = vio_T_w_i;
+	attr.vio_rotation = vio_R_w_i;
+	return attr;
+}
+
 int KeyFrame::HammingDis(const BRIEF::bitset &a, const BRIEF::bitset &b)
 {
     BRIEF::bitset xor_of_bitset = a ^ b;
@@ -580,7 +595,7 @@ double KeyFrame::getLoopRelativeYaw()
     return loop_info(7);
 }
 
-void KeyFrame::updateLoop(Eigen::Matrix<double, 8, 1 > &_loop_info)
+void KeyFrame::updateLoop(const Eigen::Matrix<double, 8, 1 > &_loop_info)
 {
 	if (abs(_loop_info(7)) < 30.0 && Vector3d(_loop_info(0), _loop_info(1), _loop_info(2)).norm() < 20.0)
 	{
