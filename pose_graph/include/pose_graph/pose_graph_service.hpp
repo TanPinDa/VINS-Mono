@@ -19,10 +19,10 @@
 namespace pose_graph {
 class PoseGraphService {
  public:
-  PoseGraphService(const PoseGraphConfig& config);
+  PoseGraphService(PoseGraphConfig& config);
   ~PoseGraphService() = default;
 
-  void LoadPoseGraph();
+  bool LoadPoseGraph();
   void SavePoseGraph();
   void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
   int GetCurrentPoseGraphSequenceCount() const;
@@ -34,8 +34,18 @@ class PoseGraphService {
   void StartOptimizationThread();
   virtual void OnPoseGraphLoaded() = 0;
   virtual void OnPoseGraphSaved() = 0;
-  virtual void OnKeyFrameAdded(std::shared_ptr<KeyFrame> current_keyframe) = 0;
-  virtual void OnPoseGraphOptimization() = 0;
+  virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) = 0;
+  virtual void OnKeyFrameConnectionFound(
+      KeyFrame::Attributes current_kf_attribute,
+      KeyFrame::Attributes old_kf_attribute,
+      std::vector<cv::Point2f> matched_2d_old_norm,
+      std::vector<double> matched_id) = 0;
+  virtual void OnPoseGraphOptimization(
+      std::vector<KeyFrame::Attributes> kf_attributes) = 0;
+  virtual void OnNewSequentialEdge(Vector3d p1, Vector3d p2) = 0;
+  virtual void OnNewLoopEdge(Vector3d p1, Vector3d p2) = 0;
+
+  PoseGraphConfig& config_;
   std::unique_ptr<PoseGraph> pose_graph_;
   std::thread optimization_thread_;
 };

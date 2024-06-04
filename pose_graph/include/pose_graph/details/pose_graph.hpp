@@ -48,33 +48,47 @@ class PoseGraph {
   PoseGraph(const PoseGraphConfig& config);
   ~PoseGraph() = default;
 
-  std::vector<std::shared_ptr<KeyFrame>> Load();
+  bool LoadSingleConfigEntry(FILE* pFile,
+                             KeyFrame::Attributes& old_kf_attribute,
+                             KeyFrame::Attributes& current_kf_attribute,
+                             std::vector<cv::Point2f>& matched_2d_old_norm,
+                             std::vector<double>& matched_id);
   void Save();
-  void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
-  void LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
-  void UpdateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1>& loop_info);
+  void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
+                   KeyFrame* old_keyframe,
+                   std::vector<cv::Point2f>& matched_2d_old_norm,
+                   std::vector<double>& matched_id);
+  void Optimize4DoF();
+  void UpdateKeyFrameLoop(int index,
+                          const Eigen::Matrix<double, 8, 1>& loop_info);
   int GetCurrentSequenceCount() const;
   Drift GetDrift() const;
+  KeyFrame::Attributes GetKeyFrameAttribute(int index) const;
+  std::vector<KeyFrame::Attributes> GetKeyFrameAttributes() const;
 
  private:
+  void LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
+                    KeyFrame* old_keyframe,
+                    std::vector<cv::Point2f>& matched_2d_old_norm,
+                    std::vector<double>& matched_id);
   int DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe);
   std::shared_ptr<KeyFrame> GetKeyFrame(int index);
   void LoadVocabulary();
   void AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe);
-  void Optimize4DoF();
 
  private:
   PoseGraphConfig config_;
   Drift drift_;
   std::mutex drift_mutex_;
   std::list<std::shared_ptr<KeyFrame>> keyframes_;
-  std::mutex keyframes_mutex_;
+  mutable std::mutex keyframes_mutex_;
   Pose world_vio_;
   std::atomic<int> current_sequence_count_ = 0;
   std::map<int, cv::Mat> image_pool_;
   int earliest_loop_index = -1;
   int base_sequence = 1;
-  std::vector<bool> sequence_loop_flags_ = {false}; // TODO: check what this means
+  std::vector<bool> sequence_loop_flags_ = {
+      false};  // TODO: check what this means
   int global_keyframe_index_counter_ = 0;
 
   // TODO: try to replace queue buffer with a single int
