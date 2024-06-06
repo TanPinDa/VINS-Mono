@@ -28,8 +28,11 @@ struct PoseGraphConfig {
   bool detect_loop_closure = true;
   std::string vocabulary_path = "";
   std::string saved_pose_graph_dir = "";
+  std::string brief_pattern_file_path = "";
   bool save_debug_image = false;
   bool fast_relocalization = false;
+  int image_rows;
+  int image_cols;
 };
 
 class PoseGraph {

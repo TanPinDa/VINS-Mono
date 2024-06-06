@@ -292,7 +292,8 @@ bool PoseGraph::LoadSingleConfigEntry(
   std::shared_ptr<KeyFrame> keyframe = std::make_shared<KeyFrame>(
       time_stamp, index, vio_translation, vio_rotation, pose_graph_translation,
       pose_graph_rotation, image, loop_index, loop_info, keypoints,
-      keypoints_norm, brief_descriptors);
+      keypoints_norm, brief_descriptors, config_.image_rows,
+      config_.image_cols, config_.brief_pattern_file_path);
   KeyFrame* old_keyframe = nullptr;
   LoadKeyFrame(keyframe, old_keyframe, matched_2d_old_norm, matched_id);
   current_kf_attribute = keyframe->getAttributes();
@@ -405,8 +406,8 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
       throw std::runtime_error("AddKeyFrame(): loop index not found");
     }
 
-    if (current_keyframe->findConnection(old_keyframe,
-                                         matched_2d_old_norm, matched_id)) {
+    if (current_keyframe->findConnection(old_keyframe, matched_2d_old_norm,
+                                         matched_id)) {
       if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
         earliest_loop_index = loop_index;
       }
@@ -516,8 +517,8 @@ void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
   }
 }
 
-void PoseGraph::UpdateKeyFrameLoop(int index,
-                                   const Eigen::Matrix<double, 8, 1>& loop_info) {
+void PoseGraph::UpdateKeyFrameLoop(
+    int index, const Eigen::Matrix<double, 8, 1>& loop_info) {
   auto keyframe = GetKeyFrame(index);
   if (!keyframe) {
     throw std::runtime_error("UpdateKeyFrameLoop(): keyframe not found");
