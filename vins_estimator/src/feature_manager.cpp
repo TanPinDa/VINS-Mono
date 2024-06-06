@@ -46,7 +46,7 @@ int FeatureManager::getFeatureCount()
 }
 
 
-bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
+bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, FeatureBase>>> &image, double td)
 {
     spdlog::debug("input feature: {}", (int)image.size());
     spdlog::debug("num of feature: {}", getFeatureCount());

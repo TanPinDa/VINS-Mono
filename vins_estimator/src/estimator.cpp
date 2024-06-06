@@ -125,7 +125,7 @@ void Estimator::processIMU(double dt, const Vector3d &input_linear_acceleration,
     angular_velocity = input_angular_velocity;
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double &timestamp_sec)
+void Estimator::processImage(const map<int, vector<pair<int, FeatureBase>>> &image, const double &timestamp_sec)
 {
     spdlog::debug("new image coming ------------------------------------------");
     spdlog::debug("Adding feature points {}", image.size());
@@ -330,7 +330,7 @@ bool Estimator::InitialStructure()
                     Vector3d world_pts = it->second;
                     cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
                     pts_3_vector.push_back(pts_3);
-                    Vector2d img_pts = i_p.second.head<2>();
+                    Vector2d img_pts(i_p.second.point.x(),i_p.second.point.y());
                     cv::Point2f pts_2(img_pts(0), img_pts(1));
                     pts_2_vector.push_back(pts_2);
                 }
