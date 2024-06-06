@@ -5,6 +5,8 @@
 Estimator::Estimator() : f_manager{orientations_}
 {
     spdlog::info("init begins");
+    tmp_pre_integration = nullptr;
+    last_marginalization_info = nullptr;
     clearState();
 }
 
@@ -65,7 +67,12 @@ void Estimator::clearState()
     imu_camera_clock_offset_ = TD;
 
     if (tmp_pre_integration != nullptr)
+    {
+        spdlog::warn("5");
+        spdlog::warn("5");
         delete tmp_pre_integration;
+        spdlog::warn("6");
+    }
     if (last_marginalization_info != nullptr)
         delete last_marginalization_info;
 
