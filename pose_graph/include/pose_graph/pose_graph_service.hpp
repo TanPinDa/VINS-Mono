@@ -9,6 +9,7 @@
 #ifndef POSE_GRAPH_POSE_GRAPH_SERVICE_HPP
 #define POSE_GRAPH_POSE_GRAPH_SERVICE_HPP
 
+#include <atomic>
 #include <memory>
 #include <thread>
 
@@ -20,7 +21,7 @@ namespace pose_graph {
 class PoseGraphService {
  public:
   PoseGraphService(PoseGraphConfig& config);
-  ~PoseGraphService() = default;
+  ~PoseGraphService();
 
   bool LoadPoseGraph();
   void SavePoseGraph();
@@ -47,6 +48,7 @@ class PoseGraphService {
 
   PoseGraphConfig& config_;
   std::unique_ptr<PoseGraph> pose_graph_;
+  std::atomic<bool> keep_running_{true};
   std::thread optimization_thread_;
 };
 }  // namespace pose_graph

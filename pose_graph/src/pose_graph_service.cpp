@@ -12,6 +12,13 @@ namespace pose_graph {
 PoseGraphService::PoseGraphService(PoseGraphConfig &config)
     : pose_graph_(std::make_unique<PoseGraph>(config)), config_(config) {}
 
+PoseGraphService::~PoseGraphService() {
+  keep_running_ = false;
+  if (optimization_thread_.joinable()) {
+    optimization_thread_.join();
+  }
+}
+
 bool PoseGraphService::LoadPoseGraph() {
   // Load previously saved pose graph from file
   TicToc clock;
@@ -119,7 +126,7 @@ void PoseGraphService::UpdateKeyFrameLoop(
 void PoseGraphService::StartOptimizationThread() {
   // Start optimization thread
   optimization_thread_ = std::thread([this]() {
-    while (true) {
+    while (keep_running_) {
       // Perform optimization
       pose_graph_->Optimize4DoF();
       auto kf_attributes = pose_graph_->GetKeyFrameAttributes();
