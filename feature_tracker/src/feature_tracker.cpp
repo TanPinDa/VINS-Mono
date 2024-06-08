@@ -82,8 +82,7 @@ void FeatureTracker::setMask()
     }
 }
 
-
-void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
+void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool &detect_new_feature_points)
 {
     cv::Mat img;
     TicToc t_r;
@@ -125,11 +124,9 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         FilterFeatureIds(track_cnt, status);
         spdlog::debug("temporal optical flow costs: {}ms", t_o.toc());
     }
-
     for (auto &n : track_cnt)
         n++;
-
-    if (PUB_THIS_FRAME)
+    if (detect_new_feature_points)
     {
         rejectWithF();
         spdlog::debug("set mask begins");

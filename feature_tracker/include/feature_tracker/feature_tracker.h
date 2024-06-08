@@ -30,7 +30,7 @@ class FeatureTracker
   public:
     FeatureTracker();
 
-    void readImage(const cv::Mat &_img,double _cur_time);
+    void readImage(const cv::Mat &_img,double _cur_time,const bool &detect_new_feature_points);
 
     void setMask();
 
