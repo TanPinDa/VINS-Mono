@@ -148,7 +148,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
 
         spdlog::debug("detect feature begins");
         TicToc t_t;
-
+        vector<cv::Point2f> new_feature_points;
         int max_number_of_new_feature_points = MAX_CNT - static_cast<int>(forw_pts.size());
         if (max_number_of_new_feature_points > 0)
         {
@@ -158,17 +158,17 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
                 cout << "mask type wrong " << endl;
             if (mask.size() != forw_img.size())
                 cout << "wrong size " << endl;
-            cv::goodFeaturesToTrack(forw_img, n_pts, max_number_of_new_feature_points, 0.01, MIN_DIST, mask);
+            cv::goodFeaturesToTrack(forw_img, new_feature_points, max_number_of_new_feature_points, 0.01, MIN_DIST, mask);
         }
         else
-            n_pts.clear();
+            new_feature_points.clear();
         spdlog::debug("detect feature costs: {}ms", t_t.toc());
 
         spdlog::debug("add feature begins");
         TicToc t_a;
-        for (auto &p : n_pts)
+        for (cv::Point2f &new_feature_point : new_feature_points)
         {
-            forw_pts.push_back(p);
+            forw_pts.push_back(new_feature_point);
             feature_ids.push_back(-1);
             track_cnt.push_back(1);
         }
