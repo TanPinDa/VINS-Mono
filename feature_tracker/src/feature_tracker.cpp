@@ -3,12 +3,24 @@
 
 int FeatureTracker::n_id = 0;
 
-bool inBorder(const cv::Point2f &pt)
+/**
+ * Checks if a 2D point is within the border of an image.
+ *
+ * @param pt The point to be checked.
+ * @param image_width The width of the image.
+ * @param image_height The height of the image.
+ * @param border_size The size of the border.
+ * @return True if the point is within the border, false otherwise.
+ */
+bool inBorder(const cv::Point2f &pt, const int &image_width, const int &image_height, const int border_size)
 {
-    const int BORDER_SIZE = 1;
+    // Round the x and y coordinates of the point to integers
     int img_x = cvRound(pt.x);
     int img_y = cvRound(pt.y);
-    return BORDER_SIZE <= img_x && img_x < COL - BORDER_SIZE && BORDER_SIZE <= img_y && img_y < ROW - BORDER_SIZE;
+
+    // Check if the rounded coordinates are within the border of the image
+    return border_size <= img_x && img_x < image_width - border_size &&
+           border_size <= img_y && img_y < image_height - border_size;
 }
 /**
  * Reduces the size of a vector of cv::Point2f based on a status vector.
@@ -114,7 +126,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         cv::calcOpticalFlowPyrLK(cur_img, forw_img, current_points, forw_pts, status, err, cv::Size(21, 21), 3);
 
         for (int i = 0; i < int(forw_pts.size()); i++)
-            if (status[i] && !inBorder(forw_pts[i]))
+            if (status[i] && !inBorder(forw_pts[i],COL,ROW,1))
                 status[i] = 0;
         FilterPoints(previous_points, status);
         FilterPoints(current_points, status);

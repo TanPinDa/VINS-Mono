@@ -20,7 +20,7 @@ using namespace std;
 using namespace camodocal;
 using namespace Eigen;
 
-bool inBorder(const cv::Point2f &pt);
+bool inBorder(const cv::Point2f &pt, const int &image_width, const int &image_height, const int border_size);
 
 void FilterPoints(vector<cv::Point2f> &v, vector<uchar> status);
 void FilterFeatureIds(vector<int> &v, vector<uchar> status);
