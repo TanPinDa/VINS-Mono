@@ -22,7 +22,7 @@ class ImageFrame
         double t;
         Matrix3d R;
         Vector3d T;
-        IntegrationBase *pre_integration;
+        std::shared_ptr<IntegrationBase> pre_integration;
         bool is_key_frame;
 };
 

@@ -164,9 +164,10 @@ private:
     double para_Tr[1][1];
     int loop_window_index;
 
-    MarginalizationInfo *last_marginalization_info;
+    
+    std::shared_ptr<MarginalizationInfo> last_marginalization_info;
     vector<double *> last_marginalization_parameter_blocks;
 
     map<double, ImageFrame> all_image_frame;
-    IntegrationBase *tmp_pre_integration;
+    std::shared_ptr<IntegrationBase> tmp_pre_integration;
 };

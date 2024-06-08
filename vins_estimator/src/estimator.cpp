@@ -5,8 +5,6 @@
 Estimator::Estimator() : f_manager{orientations_}
 {
     spdlog::info("init begins");
-    tmp_pre_integration = nullptr;
-    last_marginalization_info = nullptr;
     clearState();
 }
 
@@ -51,8 +49,8 @@ void Estimator::clearState()
     {
         if (it.second.pre_integration != nullptr)
         {
-            delete it.second.pre_integration;
-            it.second.pre_integration = nullptr;
+            it.second.pre_integration.reset();
+            
         }
     }
 
@@ -66,14 +64,12 @@ void Estimator::clearState()
     all_image_frame.clear();
     imu_camera_clock_offset_ = TD;
 
-    if (tmp_pre_integration != nullptr)
-        delete tmp_pre_integration;
+    if (tmp_pre_integration)
+        tmp_pre_integration.reset();
 
-    if (last_marginalization_info != nullptr)
-        delete last_marginalization_info;
+    if (last_marginalization_info)
+        last_marginalization_info.reset();
 
-    tmp_pre_integration = nullptr;
-    last_marginalization_info = nullptr;
     last_marginalization_parameter_blocks.clear();
 
     f_manager.clearState();
@@ -139,7 +135,7 @@ void Estimator::processImage(const map<int, vector<pair<int, FeatureBase>>> &ima
     ImageFrame imageframe(image, timestamp_sec);
     imageframe.pre_integration = tmp_pre_integration;
     all_image_frame.insert(make_pair(timestamp_sec, imageframe));
-    tmp_pre_integration = new IntegrationBase{linear_acceleration, angular_velocity, imu_linear_acceleration_biases_[frame_count], imu_angular_velocity_biases_[frame_count]};
+    tmp_pre_integration = std::make_shared<IntegrationBase>(linear_acceleration, angular_velocity, imu_linear_acceleration_biases_[frame_count], imu_angular_velocity_biases_[frame_count]);
 
     if (ESTIMATE_EXTRINSIC == 2)
     {
@@ -833,7 +829,7 @@ void Estimator::Optimization()
     TicToc t_whole_marginalization;
     if (marginalization_flag == MARGIN_OLD)
     {
-        MarginalizationInfo *marginalization_info = new MarginalizationInfo();
+        std::shared_ptr<MarginalizationInfo> marginalization_info = std::make_shared<MarginalizationInfo>();
         Vector2double();
 
         if (last_marginalization_info)
@@ -933,7 +929,7 @@ void Estimator::Optimization()
         vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
 
         if (last_marginalization_info)
-            delete last_marginalization_info;
+            last_marginalization_info.reset();
         last_marginalization_info = marginalization_info;
         last_marginalization_parameter_blocks = parameter_blocks;
     }
@@ -943,7 +939,7 @@ void Estimator::Optimization()
             std::count(std::begin(last_marginalization_parameter_blocks), std::end(last_marginalization_parameter_blocks), para_Pose[WINDOW_SIZE - 1]))
         {
 
-            MarginalizationInfo *marginalization_info = new MarginalizationInfo();
+            std::shared_ptr<MarginalizationInfo>marginalization_info = std::make_shared<MarginalizationInfo>();
             Vector2double();
             if (last_marginalization_info)
             {
@@ -998,7 +994,7 @@ void Estimator::Optimization()
 
             vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
             if (last_marginalization_info)
-                delete last_marginalization_info;
+                last_marginalization_info.reset();
             last_marginalization_info = marginalization_info;
             last_marginalization_parameter_blocks = parameter_blocks;
         }
@@ -1052,13 +1048,12 @@ void Estimator::SlideWindow()
             {
                 map<double, ImageFrame>::iterator it_0;
                 it_0 = all_image_frame.find(t_0);
-                delete it_0->second.pre_integration;
-                it_0->second.pre_integration = nullptr;
+                it_0->second.pre_integration.reset();
 
                 for (map<double, ImageFrame>::iterator it = all_image_frame.begin(); it != it_0; ++it)
                 {
                     if (it->second.pre_integration)
-                        delete it->second.pre_integration;
+                        it->second.pre_integration.reset();
                     it->second.pre_integration = NULL;
                 }
 
