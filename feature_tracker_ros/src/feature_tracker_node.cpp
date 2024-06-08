@@ -22,39 +22,47 @@ FeatureTracker trackerData[NUM_OF_CAM];
 double first_image_time;
 int pub_count = 1;
 bool first_image_flag = true;
-double last_image_time = 0;
+
+double prev_image_time = 0;
+double current_image_time = 0;
 bool init_pub = 0;
+double maximum_consecutive_image_dt = 1.0;
+double image_publishing_period_s = 1.0 / FREQ;
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    if(first_image_flag)
+    current_image_time = img_msg->header.stamp.toSec();
+    ROS_WARN_STREAM(FREQ <<"" << current_image_time << " " << first_image_time << " " << image_publishing_period_s);
+    if (first_image_flag)
     {
         first_image_flag = false;
-        first_image_time = img_msg->header.stamp.toSec();
-        last_image_time = img_msg->header.stamp.toSec();
+        first_image_time = current_image_time;
+        prev_image_time = current_image_time;
         return;
     }
     // detect unstable camera stream
-    if (img_msg->header.stamp.toSec() - last_image_time > 1.0 || img_msg->header.stamp.toSec() < last_image_time)
+    if (current_image_time - prev_image_time > maximum_consecutive_image_dt || current_image_time < prev_image_time)
     {
         ROS_WARN("image discontinue! reset the feature tracker!");
-        first_image_flag = true; 
-        last_image_time = 0;
-        pub_count = 1;
+        first_image_flag = true;
+        prev_image_time = 0;
+        current_image_time = 0;
+        first_image_time = 0;
         std_msgs::Bool restart_flag;
         restart_flag.data = true;
         pub_restart.publish(restart_flag);
         return;
     }
-    last_image_time = img_msg->header.stamp.toSec();
+
+    prev_image_time = current_image_time;
     // frequency control
-    if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
+    if (round(1.0 * pub_count / (current_image_time - first_image_time)) <= FREQ)
     {
         PUB_THIS_FRAME = true;
         // reset the frequency control
-        if (abs(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time) - FREQ) < 0.01 * FREQ)
+        if (abs(1.0 * pub_count / (current_image_time - first_image_time) - FREQ) < 0.01 * FREQ)
         {
-            first_image_time = img_msg->header.stamp.toSec();
+            first_image_time = current_image_time;
             pub_count = 0;
         }
     }
@@ -82,17 +90,21 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
+        
+        // ROW here referes to the image_height , image y dimension. This helps to split stereo images assuming that the image is stack vertically.
         if (i != 1 || !STEREO_TRACK)
-            trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
+            trackerData[i].readImage(show_img.rowRange(ROW * i, ROW * (i + 1)), current_image_time);
         else
         {
+            // ROS_WARN("IS STEREO STEREO")
+            // TODO move out of rosnode. Seems like this should not be here. Should be handled by readImage
             if (EQUALIZE)
             {
                 cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-                clahe->apply(ptr->image.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
+                clahe->apply(show_img.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
             }
             else
-                trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i + 1));
+                trackerData[i].cur_img = show_img.rowRange(ROW * i, ROW * (i + 1));
         }
 
 #if SHOW_UNDISTORTION
@@ -210,7 +222,7 @@ int main(int argc, char **argv)
     ros::NodeHandle n("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     readParameters(n);
-
+    image_publishing_period_s = 1.0 / FREQ;
     for (int i = 0; i < NUM_OF_CAM; i++)
         trackerData[i].readIntrinsicParameter(CAM_NAMES[i]);
 
