@@ -138,7 +138,7 @@ public:
   void removeBack();
   void removeFront(int frame_count);
   void removeOutlier();
-  list<FeatureOccurrencesAcrossFrames> feature;
+  list<FeatureOccurrencesAcrossFrames> feature_tracks;
   int last_track_num;
 
 private:

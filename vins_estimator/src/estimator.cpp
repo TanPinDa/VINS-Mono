@@ -250,7 +250,7 @@ bool Estimator::InitialStructure()
     Vector3d T[frame_count + 1];
     map<int, Vector3d> sfm_tracked_points;
     vector<SFMFeature> sfm_f;
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
         int imu_j = it_per_id.start_frame - 1;
         SFMFeature tmp_feature;
@@ -411,7 +411,7 @@ bool Estimator::VisualInitialAlign()
             linear_velocities_[kv] = frame_i->second.R * x.segment<3>(kv * 3);
         }
     }
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
         it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
@@ -723,7 +723,7 @@ void Estimator::Optimization()
     }
     int f_m_cnt = 0;
     int feature_index = -1;
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
         it_per_id.used_num = it_per_id.matched_features_in_frames.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
@@ -778,7 +778,7 @@ void Estimator::Optimization()
         problem.AddParameterBlock(relo_Pose, SIZE_POSE, pose_manifold);
         int retrive_feature_index = 0;
         int feature_index = -1;
-        for (auto &it_per_id : f_manager.feature)
+        for (auto &it_per_id : f_manager.feature_tracks)
         {
             it_per_id.used_num = it_per_id.matched_features_in_frames.size();
             if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
@@ -863,7 +863,7 @@ void Estimator::Optimization()
 
         {
             int feature_index = -1;
-            for (auto &it_per_id : f_manager.feature)
+            for (auto &it_per_id : f_manager.feature_tracks)
             {
                 it_per_id.used_num = it_per_id.matched_features_in_frames.size();
                 if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
@@ -1194,7 +1194,7 @@ void Estimator::UpdateCameraPoseInWorldFrame(Eigen::Vector3d &out_position, Eige
 
 void Estimator::UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const
 {
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
         int used_num;
         used_num = it_per_id.matched_features_in_frames.size();
@@ -1212,7 +1212,7 @@ void Estimator::UpdatePointClouds(std::vector<Eigen::Vector3d> &out_point_clouds
 void Estimator::UpdateMarginedPointClouds(std::vector<Eigen::Vector3d> &out_point_clouds) const
 {
 
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
         int used_num;
         used_num = it_per_id.matched_features_in_frames.size();
@@ -1232,7 +1232,7 @@ void Estimator::UpdateKeyframePointClouds(std::vector<Eigen::Vector3d> &out_poin
                                           std::vector<std::vector<float>> &feature_2d_3d_matches) const
 {
 
-    for (auto &it_per_id : f_manager.feature)
+    for (auto &it_per_id : f_manager.feature_tracks)
     {
 
         int frame_size = it_per_id.matched_features_in_frames.size();
