@@ -2,7 +2,7 @@
 #include "spdlog/spdlog.h"
 #include "spdlog/fmt/ostr.h"
 
-Estimator::Estimator() : f_manager{orientations_}
+Estimator::Estimator() : f_manager{}
 {
     spdlog::info("init begins");
     clearState();
@@ -392,7 +392,7 @@ bool Estimator::VisualInitialAlign()
         TIC_TMP[i].setZero();
     rotation_cameras_to_imu_[0] = RIC[0];
     f_manager.SetRotationCameraToImu(rotation_cameras_to_imu_);
-    f_manager.triangulate(positions_, &(TIC_TMP[0]), &(RIC[0]));
+    f_manager.triangulate(orientations_, positions_, &(TIC_TMP[0]), &(RIC[0]));
 
     double s = (x.tail<1>())(0);
     for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -478,7 +478,7 @@ void Estimator::SolveOdometry()
     if (solver_flag == NON_LINEAR)
     {
         TicToc t_tri;
-        f_manager.triangulate(positions_, translation_cameras_to_imu_, rotation_cameras_to_imu_);
+        f_manager.triangulate(orientations_, positions_, translation_cameras_to_imu_, rotation_cameras_to_imu_);
         spdlog::debug("triangulation costs {}", t_tri.toc());
         Optimization();
     }

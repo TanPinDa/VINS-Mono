@@ -6,11 +6,8 @@ int FeatureOccurrencesAcrossFrames::endFrame()
     return start_frame + matched_features_in_frames.size() - 1;
 }
 
-FeatureManager::FeatureManager(Matrix3d imu_orientations_wrt_world[])
-// TODO: Consider if we want to do this for translation as well, or pass in rotation instead.
-// Likely cleaner to pass in rotation instead of attaching the array like this. Unsure about compute related issues
+FeatureManager::FeatureManager()
 
-    : imu_orientations_wrt_world_(imu_orientations_wrt_world)
 {
     for (int i = 0; i < NUM_OF_CAM; i++)
         rotation_of_cameras_to_imu_[i].setIdentity();
@@ -203,7 +200,7 @@ VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
-void FeatureManager::triangulate(const Vector3d translations_imu_to_world[],const Vector3d translations_camera_to_imu[],const Matrix3d rotations_camera_to_imu[])
+void FeatureManager::triangulate(const Matrix3d imu_orientations_wrt_world[], const Vector3d translations_imu_to_world[], const Vector3d translations_camera_to_imu[], const Matrix3d rotations_camera_to_imu[])
 {
     for (auto &it_per_id : feature)
     {
@@ -220,8 +217,8 @@ void FeatureManager::triangulate(const Vector3d translations_imu_to_world[],cons
         int svd_idx = 0;
 
         Eigen::Matrix<double, 3, 4> P0;
-        Eigen::Vector3d t0 = translations_imu_to_world[imu_i] + imu_orientations_wrt_world_[imu_i] * translations_camera_to_imu[0];
-        Eigen::Matrix3d R0 = imu_orientations_wrt_world_[imu_i] * rotations_camera_to_imu[0];
+        Eigen::Vector3d t0 = translations_imu_to_world[imu_i] + imu_orientations_wrt_world[imu_i] * translations_camera_to_imu[0];
+        Eigen::Matrix3d R0 = imu_orientations_wrt_world[imu_i] * rotations_camera_to_imu[0];
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();
         P0.rightCols<1>() = Eigen::Vector3d::Zero();
 
@@ -229,8 +226,8 @@ void FeatureManager::triangulate(const Vector3d translations_imu_to_world[],cons
         {
             imu_j++;
 
-            Eigen::Vector3d t1 = translations_imu_to_world[imu_j] + imu_orientations_wrt_world_[imu_j] * translations_camera_to_imu[0];
-            Eigen::Matrix3d R1 = imu_orientations_wrt_world_[imu_j] * rotation_of_cameras_to_imu_[0];
+            Eigen::Vector3d t1 = translations_imu_to_world[imu_j] + imu_orientations_wrt_world[imu_j] * translations_camera_to_imu[0];
+            Eigen::Matrix3d R1 = imu_orientations_wrt_world[imu_j] * rotation_of_cameras_to_imu_[0];
             Eigen::Vector3d t = R0.transpose() * (t1 - t0);
             Eigen::Matrix3d R = R0.transpose() * R1;
             Eigen::Matrix<double, 3, 4> P;

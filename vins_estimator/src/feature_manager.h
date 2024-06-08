@@ -116,7 +116,7 @@ public:
 class FeatureManager
 {
 public:
-  FeatureManager(Matrix3d _Rs[]);
+  FeatureManager();
 
   void SetRotationCameraToImu(Matrix3d _ric[]);
 
@@ -133,7 +133,7 @@ public:
   void removeFailures();
   void clearDepth(const VectorXd &x);
   VectorXd getDepthVector();
-  void triangulate(const Vector3d translations_imu_to_world[], const Vector3d translations_camera_to_imu[], const Matrix3d rotations_camera_to_imu[]);
+  void triangulate(const Matrix3d imu_orientations_wrt_world[], const Vector3d translations_imu_to_world[], const Vector3d translations_camera_to_imu[], const Matrix3d rotations_camera_to_imu[]);
   void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
   void removeBack();
   void removeFront(int frame_count);
@@ -143,9 +143,6 @@ public:
 
 private:
   double compensatedParallax2(const FeatureOccurrencesAcrossFrames &it_per_id, int frame_count);
-
-  // This is a pointer to an array of Matrices. The array is updated outside this class
-  const Matrix3d *imu_orientations_wrt_world_;
   Matrix3d rotation_of_cameras_to_imu_[NUM_OF_CAM];
 };
 
