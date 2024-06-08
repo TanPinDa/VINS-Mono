@@ -133,7 +133,7 @@ public:
   void removeFailures();
   void clearDepth(const VectorXd &x);
   VectorXd getDepthVector();
-  void triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[]);
+  void triangulate(const Vector3d translations_imu_to_world[], const Vector3d translations_camera_to_imu[], const Matrix3d rotations_camera_to_imu[]);
   void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
   void removeBack();
   void removeFront(int frame_count);

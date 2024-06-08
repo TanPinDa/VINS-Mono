@@ -203,7 +203,7 @@ VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
-void FeatureManager::triangulate(Vector3d translations_imu_to_world[], Vector3d translations_camera_to_imu[], Matrix3d rotations_camera_to_imu[])
+void FeatureManager::triangulate(const Vector3d translations_imu_to_world[],const Vector3d translations_camera_to_imu[],const Matrix3d rotations_camera_to_imu[])
 {
     for (auto &it_per_id : feature)
     {
