@@ -142,7 +142,7 @@ public:
   int last_track_num;
 
 private:
-  double compensatedParallax2(const FeatureOccurrencesAcrossFrames &it_per_id, int frame_count);
+  double compensatedParallax2(const FeatureOccurrencesAcrossFrames &feature_track, int frame_count);
   Matrix3d rotation_of_cameras_to_imu_[NUM_OF_CAM];
 };
 
