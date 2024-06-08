@@ -22,8 +22,8 @@ using namespace Eigen;
 
 bool inBorder(const cv::Point2f &pt);
 
-void reduceVector(vector<cv::Point2f> &v, vector<uchar> status);
-void reduceVector(vector<int> &v, vector<uchar> status);
+void FilterPoints(vector<cv::Point2f> &v, vector<uchar> status);
+void FilterFeatureIds(vector<int> &v, vector<uchar> status);
 
 class FeatureTracker
 {
@@ -53,7 +53,7 @@ class FeatureTracker
     vector<cv::Point2f> previous_points, current_points, forw_pts;
     vector<cv::Point2f> previous_undistorted_points, current_undistorted_points;
     vector<cv::Point2f> pts_velocity;
-    vector<int> ids;
+    vector<int> feature_ids;
     vector<int> track_cnt;
     map<int, cv::Point2f> current_undistorted_points_by_id;
     map<int, cv::Point2f> previous_undistorted_points_by_id;

@@ -141,7 +141,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         {
             auto &un_pts = trackerData[i].current_undistorted_points;
             auto &cur_pts = trackerData[i].current_points;
-            auto &ids = trackerData[i].ids;
+            auto &ids = trackerData[i].feature_ids;
             auto &pts_velocity = trackerData[i].pts_velocity;
             for (unsigned int j = 0; j < ids.size(); j++)
             {
