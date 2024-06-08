@@ -31,6 +31,7 @@ double image_publishing_period_s = 1.0 / FREQ;
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
+    bool is_publish_this_frame = false;
     current_image_time = img_msg->header.stamp.toSec();
     ROS_WARN_STREAM(FREQ <<"" << current_image_time << " " << first_image_time << " " << image_publishing_period_s);
     if (first_image_flag)
@@ -58,7 +59,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     // frequency control
     if (round(1.0 * pub_count / (current_image_time - first_image_time)) <= FREQ)
     {
-        PUB_THIS_FRAME = true;
+        is_publish_this_frame = true;
         // reset the frequency control
         if (abs(1.0 * pub_count / (current_image_time - first_image_time) - FREQ) < 0.01 * FREQ)
         {
@@ -66,8 +67,6 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             pub_count = 0;
         }
     }
-    else
-        PUB_THIS_FRAME = false;
 
     cv_bridge::CvImageConstPtr ptr;
     if (img_msg->encoding == "8UC1")
@@ -93,7 +92,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         
         // ROW here referes to the image_height , image y dimension. This helps to split stereo images assuming that the image is stack vertically.
         if (i != 1 || !STEREO_TRACK)
-            trackerData[i].readImage(show_img.rowRange(ROW * i, ROW * (i + 1)), current_image_time);
+            trackerData[i].readImage(show_img.rowRange(ROW * i, ROW * (i + 1)), current_image_time,is_publish_this_frame);
         else
         {
             // ROS_WARN("IS STEREO STEREO")
@@ -122,7 +121,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             break;
     }
 
-   if (PUB_THIS_FRAME)
+   if (is_publish_this_frame)
    {
         pub_count++;
         // Publishes a point cloud message with 5 channels. The depth of all the points is set to 1 (arbitarily?) 
