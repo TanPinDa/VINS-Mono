@@ -8,10 +8,9 @@
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
-#include "utility/tic_toc.h"
-#include "utility/utility.h"
-#include "parameters.h"
 #include "DBoW/FBrief.h"
+#include "pose_graph/utility/tic_toc.h"
+#include "pose_graph/utility/utility.h"
 
 #define MIN_LOOP_NUM 25
 
@@ -48,22 +47,26 @@ class KeyFrame {
            vector<cv::Point3f> &_point_3d, vector<cv::Point2f> &_point_2d_uv,
            vector<cv::Point2f> &_point_2d_normal, vector<double> &_point_id,
            int _sequence, int image_rows, int image_cols,
-           std::string brief_pattern_file_path);
+           std::string brief_pattern_file_path, bool debug_image,
+           camodocal::CameraPtr camera);
   KeyFrame(double _time_stamp, int _index, Vector3d &_vio_T_w_i,
            Matrix3d &_vio_R_w_i, Vector3d &_T_w_i, Matrix3d &_R_w_i,
            cv::Mat &_image, int _loop_index,
            Eigen::Matrix<double, 8, 1> &_loop_info,
            vector<cv::KeyPoint> &_keypoints,
            vector<cv::KeyPoint> &_keypoints_norm,
-           vector<BRIEF::bitset> &_brief_descriptors, , int image_rows,
-           int image_cols, std::string brief_pattern_file_path);
+           vector<BRIEF::bitset> &_brief_descriptors, int image_rows,
+           int image_cols, std::string brief_pattern_file_path,
+           bool debug_image);
   bool findConnection(KeyFrame *old_kf,
                       vector<cv::Point2f> &matched_2d_old_norm,
-                      vector<double> &matched_id);
+                      vector<double> &matched_id,
+                      const Eigen::Vector3d &imu_camera_translation,
+                      const Eigen::Matrix3d &imu_camera_rotation);
   cv::Mat getThumbImage();
   Attributes getAttributes();
   void computeWindowBRIEFPoint();
-  void computeBRIEFPoint();
+  void computeBRIEFPoint(camodocal::CameraPtr camera);
   // void extractBrief();
   int HammingDis(const BRIEF::bitset &a, const BRIEF::bitset &b);
   bool searchInAera(const BRIEF::bitset window_descriptor,
@@ -84,7 +87,9 @@ class KeyFrame {
   void PnPRANSAC(const vector<cv::Point2f> &matched_2d_old_norm,
                  const std::vector<cv::Point3f> &matched_3d,
                  std::vector<uchar> &status, Eigen::Vector3d &PnP_T_old,
-                 Eigen::Matrix3d &PnP_R_old);
+                 Eigen::Matrix3d &PnP_R_old,
+                 const Eigen::Vector3d &imu_camera_translation,
+                 const Eigen::Matrix3d &imu_camera_rotation);
   void getVioPose(Eigen::Vector3d &_T_w_i, Eigen::Matrix3d &_R_w_i);
   void getPose(Eigen::Vector3d &_T_w_i, Eigen::Matrix3d &_R_w_i);
   void updatePose(const Eigen::Vector3d &_T_w_i, const Eigen::Matrix3d &_R_w_i);
@@ -129,4 +134,5 @@ class KeyFrame {
   std::mutex m_thumbimage_;
   int image_rows_;
   int image_cols_;
+  bool debug_image_ = false;
 };

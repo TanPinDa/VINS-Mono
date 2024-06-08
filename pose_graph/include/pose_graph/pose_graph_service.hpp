@@ -13,20 +13,26 @@
 #include <memory>
 #include <thread>
 
+#include "camodocal/camera_models/CameraFactory.h"
 #include <Eigen/Core>
+#include <opencv2/opencv.hpp>
 
 #include "pose_graph/details/pose_graph.hpp"
 
 namespace pose_graph {
 class PoseGraphService {
  public:
-  PoseGraphService(PoseGraphConfig& config);
   ~PoseGraphService();
 
+  void InitialiseWithConfig(PoseGraphConfig& config,
+                            camodocal::CameraPtr camera);
   bool LoadPoseGraph();
   void SavePoseGraph();
   void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
+  void UpdatePoseGraphImuCameraPose(const PoseGraph::Pose& imu_camera_pose);
   int GetCurrentPoseGraphSequenceCount() const;
+  PoseGraph::Pose GetPoseGraphWorldVio() const;
+  PoseGraph::Drift GetPoseGraphDrift() const;
 
   void UpdateKeyFrameLoop(const int& index,
                           const Eigen::Matrix<double, 8, 1>& loop_info);
@@ -36,17 +42,19 @@ class PoseGraphService {
   virtual void OnPoseGraphLoaded() = 0;
   virtual void OnPoseGraphSaved() = 0;
   virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) = 0;
+  virtual void OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
+                                int count) = 0;
   virtual void OnKeyFrameConnectionFound(
       KeyFrame::Attributes current_kf_attribute,
       KeyFrame::Attributes old_kf_attribute,
       std::vector<cv::Point2f> matched_2d_old_norm,
-      std::vector<double> matched_id) = 0;
+      std::vector<double> matched_id, cv::Mat& thumb_image) = 0;
   virtual void OnPoseGraphOptimization(
       std::vector<KeyFrame::Attributes> kf_attributes) = 0;
   virtual void OnNewSequentialEdge(Vector3d p1, Vector3d p2) = 0;
   virtual void OnNewLoopEdge(Vector3d p1, Vector3d p2) = 0;
 
-  PoseGraphConfig& config_;
+  PoseGraphConfig config_;
   std::unique_ptr<PoseGraph> pose_graph_;
   std::atomic<bool> keep_running_{true};
   std::thread optimization_thread_;

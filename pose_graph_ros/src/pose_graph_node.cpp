@@ -10,15 +10,20 @@
 
 #include <fstream>
 
+#include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/PointStamped.h>
-#include <opencv2/opencv.hpp>
 #include <ros/package.h>
+
+#define SHOW_S_EDGE false
+#define SHOW_L_EDGE true
 
 namespace pose_graph {
 PoseGraphNode::PoseGraphNode() {
-  if (Initialize()) {
-    ROS_INFO("PoseGraphNode initialized");
+  if (!Initialize()) {
+    ROS_ERROR("Failed to initialize PoseGraphNode");
+    ros::shutdown();
   }
+  ROS_INFO("PoseGraphNode initialized");
 }
 
 PoseGraphNode::~PoseGraphNode() {
@@ -31,11 +36,11 @@ PoseGraphNode::~PoseGraphNode() {
   }
 }
 
-void PoseGraphNode::Initialize() {
+bool PoseGraphNode::Initialize() {
   if (!ReadParameters()) {
     ROS_ERROR("Failed to read parameters");
     ros::shutdown();
-    return;
+    return false;
   }
 
   // Load config file
@@ -43,16 +48,18 @@ void PoseGraphNode::Initialize() {
   if (!fs.isOpened()) {
     ROS_ERROR("Failed to open config file: %s", config_file_path_.c_str());
     ros::shutdown();
-    return;
+    return false;
   }
 
   double camera_visual_size = fs["visualize_camera_size"];
-  camera_pose_vis_.setScale(camera_visual_size);
-  camera_pose_vis_.setLineWidth(camera_visual_size / 10.0);
+  camera_pose_vis_ =
+      std::make_unique<CameraPoseVisualization>(1.0, 0.0, 1.0, 1.0);
+  camera_pose_vis_->setScale(camera_visual_size);
+  camera_pose_vis_->setLineWidth(camera_visual_size / 10.0);
 
-  loop_closure_ = fs["loop_closure"];
-  std::string image_topic;
-  bool load_previous_pose_graph;
+  loop_closure_ = (int)fs["loop_closure"];
+
+  bool load_previous_pose_graph = false;
   if (loop_closure_) {
     config_.image_rows = fs["image_height"];
     config_.image_cols = fs["image_width"];
@@ -63,34 +70,30 @@ void PoseGraphNode::Initialize() {
 
     camera_ = camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
         config_file_path_.c_str());
-    image_topic = fs["image_topic"];
-    config_.saved_pose_graph_dir = fs["pose_graph_save_path"];
-    if (fs["save_image"] == 0) {
-      config_.save_debug_image = false;
-    } else {
-      config_.save_debug_image = true;
-    }
+    image_topic_ = std::string(fs["image_topic"]);
+    config_.saved_pose_graph_dir = std::string(fs["pose_graph_save_path"]);
+    config_.save_debug_image = (int)fs["save_image"];
 
-    std::string vins_result_path = fs["output_path"];
-    FileSystemHelper::createDirectoryIfNotExists(config_.saved_pose_graph_dir);
-    FileSystemHelper::createDirectoryIfNotExists(vins_result_path);
+    vins_result_path_ = std::string(fs["output_path"]);
+    FileSystemHelper::createDirectoryIfNotExists(
+        config_.saved_pose_graph_dir.c_str());
+    FileSystemHelper::createDirectoryIfNotExists(vins_result_path_.c_str());
 
-    visualise_imu_forward_ = fs["visualise_imu_forward"];
-    load_previous_pose_graph = fs["load_previous_pose_graph"];
-    config_.fast_relocalization = fs["fast_relocalization"];
-    vins_result_path = vins_result_path + "/vins_result_loop.csv";
-    std::ofstream fout(vins_result_path, std::ios::out);
+    visualise_imu_forward_ = (int)fs["visualise_imu_forward"];
+    load_previous_pose_graph = (int)fs["load_previous_pose_graph"];
+    config_.fast_relocalization = (int)fs["fast_relocalization"];
+    vins_result_path_ = vins_result_path_ + "/vins_result_loop.csv";
+
+    std::ofstream fout(vins_result_path_, std::ios::out);
     fout.close();
   }
   fs.release();
-
-  pose_graph_service_ = std::make_unique<PoseGraphService>(config_);
 
   if (loop_closure_) {
     if (load_previous_pose_graph) {
       ROS_INFO("Loading previous pose graph");
       std::lock_guard<std::mutex> lock(process_mutex_);
-      pose_graph_service_->LoadPoseGraph();
+      LoadPoseGraph();
     } else {
       ROS_INFO("Not loading any previous pose graph");
     }
@@ -102,7 +105,11 @@ void PoseGraphNode::Initialize() {
   posegraph_visualization_->setLineWidth(0.01);
 
   StartPublishersAndSubscribers();
+  
+  PoseGraphService::InitialiseWithConfig(config_, camera_);
+
   StartBackgroundThreads();
+  return true;
 }
 
 bool PoseGraphNode::ReadParameters() {
@@ -123,28 +130,25 @@ bool PoseGraphNode::ReadParameters() {
 }
 
 void PoseGraphNode::StartPublishersAndSubscribers() {
-  sub_imu_forward_ = nh_.subscribe("/vins_estimator/imu_propagate", 2000,
-                                   std::bind(&PoseGraphNode::ImuForwardCallback,
-                                             this, std::placeholders::_1));
-  sub_vio_ = nh_.subscribe(
-      "/vins_estimator/odometry", 2000,
-      std::bind(&PoseGraphNode::VioCallback, this, std::placeholders::_1));
-  sub_image_ = nh_.subscribe(
-      IMAGE_TOPIC, 2000,
-      std::bind(&PoseGraphNode::ImageCallback, this, std::placeholders::_1));
-  sub_pose_ = nh_.subscribe(
-      "/vins_estimator/keyframe_pose", 2000,
-      std::bind(&PoseGraphNode::PoseCallback, this, std::placeholders::_1));
-  sub_extrinsic_ = nh_.subscribe("/vins_estimator/extrinsic", 2000,
-                                 std::bind(&PoseGraphNode::ExtrinsicCallback,
-                                           this, std::placeholders::_1));
-  sub_point_ = nh_.subscribe(
-      "/vins_estimator/keyframe_point", 2000,
-      std::bind(&PoseGraphNode::PointCallback, this, std::placeholders::_1));
-  sub_relo_relative_pose_ =
-      nh_.subscribe("/vins_estimator/relo_relative_pose", 2000,
-                    std::bind(&PoseGraphNode::ReloRelativePoseCallback, this,
-                              std::placeholders::_1));
+  sub_imu_forward_ = nh_.subscribe<nav_msgs::Odometry>(
+      "/vins_estimator/imu_propagate", 2000, &PoseGraphNode::ImuForwardCallback,
+      this);
+  sub_vio_ = nh_.subscribe<nav_msgs::Odometry>(
+      "/vins_estimator/odometry", 2000, &PoseGraphNode::VioCallback, this);
+  sub_image_ = nh_.subscribe<sensor_msgs::Image>(
+      image_topic_, 2000, &PoseGraphNode::ImageCallback, this);
+  sub_pose_ =
+      nh_.subscribe<nav_msgs::Odometry>("/vins_estimator/keyframe_pose", 2000,
+                                        &PoseGraphNode::PoseCallback, this);
+  sub_extrinsic_ = nh_.subscribe<nav_msgs::Odometry>(
+      "/vins_estimator/extrinsic", 2000, &PoseGraphNode::ExtrinsicCallback,
+      this);
+  sub_point_ = nh_.subscribe<sensor_msgs::PointCloud>(
+      "/vins_estimator/keyframe_point", 2000, &PoseGraphNode::PointCallback,
+      this);
+  sub_relo_relative_pose_ = nh_.subscribe<nav_msgs::Odometry>(
+      "/vins_estimator/relo_relative_pose", 2000,
+      &PoseGraphNode::ReloRelativePoseCallback, this);
 
   pub_match_img_ = nh_.advertise<sensor_msgs::Image>("match_image", 1000);
   pub_camera_pose_visual_ = nh_.advertise<visualization_msgs::MarkerArray>(
@@ -286,12 +290,12 @@ void PoseGraphNode::Process() {
             pose_msg->header.stamp.toSec(), frame_index_, T, R, image, point_3d,
             point_2d_uv, point_2d_normal, point_id, sequence_index_,
             config_.image_rows, config_.image_cols,
-            config_.brief_pattern_file_path);
+            config_.brief_pattern_file_path, config_.save_debug_image, camera_);
         {
           std::lock_guard<std::mutex> lock(process_mutex_);
-          pose_graph_service_->AddKeyFrame(keyframe);
+          AddKeyFrame(keyframe);
           {
-            int sequence_cnt = posegraph.getCurrentSequenceCount();
+            int sequence_cnt = GetCurrentPoseGraphSequenceCount();
             auto kf_attribute = keyframe->getAttributes();
             Eigen::Quaterniond quarternion{kf_attribute.rotation};
             geometry_msgs::PoseStamped pose_stamped;
@@ -310,14 +314,17 @@ void PoseGraphNode::Process() {
             path_[sequence_cnt].header = pose_stamped.header;
 
             if (save_loop_path) {
-              std::ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+              std::ofstream loop_path_file(vins_result_path_, ios::app);
               loop_path_file.setf(ios::fixed, ios::floatfield);
               loop_path_file.precision(0);
-              loop_path_file << keyframe->time_stamp * 1e9 << ",";
+              loop_path_file << kf_attribute.time_stamp * 1e9 << ",";
               loop_path_file.precision(5);
-              loop_path_file << P.x() << "," << P.y() << "," << P.z() << ","
-                             << Q.w() << "," << Q.x() << "," << Q.y() << ","
-                             << Q.z() << "," << endl;
+              loop_path_file << kf_attribute.position.x() << ","
+                             << kf_attribute.position.y() << ","
+                             << kf_attribute.position.z() << ","
+                             << quarternion.w() << "," << quarternion.x() << ","
+                             << quarternion.y() << "," << quarternion.z() << ","
+                             << endl;
               loop_path_file.close();
             }
           }
@@ -339,7 +346,7 @@ void PoseGraphNode::Command() {
     if (c == 's') {
       {
         std::lock_guard<std::mutex> lock(process_mutex_);
-        pose_graph_service_->SavePoseGraph();
+        SavePoseGraph();
       }
       // printf(
       //     "save pose graph finish\nyou can set 'load_previous_pose_graph' to
@@ -350,17 +357,17 @@ void PoseGraphNode::Command() {
       // printf("program shutting down...\n");
       // ros::shutdown();
     }
-    if (c == 'n') new_sequence();
+    if (c == 'n') NewSequence();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 }
 
 void PoseGraphNode::Publish() {
-  int sequence_cnt = posegraph.getCurrentSequenceCount();
+  int sequence_cnt = GetCurrentPoseGraphSequenceCount();
   for (int i = 1; i <= sequence_cnt; i++) {
-    pub_pg_path_.publish(path[i]);
-    pub_path_[i].publish(path[i]);
+    pub_pg_path_.publish(path_[i]);
+    pub_path_[i].publish(path_[i]);
     posegraph_visualization_->publish_by(pub_pose_graph_,
                                          path_[sequence_cnt].header);
   }
@@ -368,61 +375,403 @@ void PoseGraphNode::Publish() {
   pub_base_path_.publish(base_path_);
 }
 
-void PoseGraphNode::OnPoseGraphLoaded() {
-  // TODO: Implement this
+void PoseGraphNode::NewSequence() {
+  ROS_INFO("new sequence");
+  sequence_index_++;
+  ROS_INFO("sequence cnt %d", sequence_index_);
+  if (sequence_index_ > 5) {
+    ROS_WARN(
+        "only support 5 sequences since it's boring to copy code for more "
+        "sequences.");
+    ROS_BREAK();
+  }
+  posegraph_visualization_->reset();
+  Publish();
+  {
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+    while (!image_buffer_.empty()) image_buffer_.pop();
+    while (!point_buffer_.empty()) point_buffer_.pop();
+    while (!pose_buffer_.empty()) pose_buffer_.pop();
+    while (!odometry_buffer_.empty()) odometry_buffer_.pop();
+  }
 }
 
-void PoseGraphNode::OnPoseGraphSaved() {
-  // TODO: Implement this
-}
+void PoseGraphNode::OnPoseGraphLoaded() { ROS_DEBUG("Pose graph loaded"); }
+
+void PoseGraphNode::OnPoseGraphSaved() { ROS_DEBUG("Pose graph saved"); }
+
 void PoseGraphNode::OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) {
-  // TODO: Implement this
+  ROS_DEBUG("On Keyframe added");
 }
+
+void PoseGraphNode::OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
+                                     int count) {
+  ROS_INFO("On Keyframe loaded");
+  Eigen::Quaterniond Q{kf_attribute.rotation};
+  geometry_msgs::PoseStamped pose_stamped;
+  pose_stamped.header.stamp = ros::Time(kf_attribute.time_stamp);
+  pose_stamped.header.frame_id = "world";
+  pose_stamped.pose.position.x =
+      kf_attribute.position.x() + visualization_shift_x_;
+  pose_stamped.pose.position.y =
+      kf_attribute.position.y() + visualization_shift_y_;
+  pose_stamped.pose.position.z = kf_attribute.position.z();
+  pose_stamped.pose.orientation.x = Q.x();
+  pose_stamped.pose.orientation.y = Q.y();
+  pose_stamped.pose.orientation.z = Q.z();
+  pose_stamped.pose.orientation.w = Q.w();
+  base_path_.poses.push_back(pose_stamped);
+  base_path_.header = pose_stamped.header;
+
+  if (count % 20 == 0) {
+    Publish();
+  }
+}
+
 void PoseGraphNode::OnKeyFrameConnectionFound(
     KeyFrame::Attributes current_kf_attribute,
     KeyFrame::Attributes old_kf_attribute,
     std::vector<cv::Point2f> matched_2d_old_norm,
-    std::vector<double> matched_id) {
-  // TODO: Implement this
+    std::vector<double> matched_id, cv::Mat& thumb_image) {
+  ROS_INFO("On Keyframe connection found");
+  {
+    sensor_msgs::ImagePtr msg =
+        cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumb_image)
+            .toImageMsg();
+    msg->header.stamp = ros::Time(current_kf_attribute.time_stamp);
+    pub_match_img_.publish(msg);
+  }
+  if (config_.fast_relocalization) {
+    sensor_msgs::PointCloud msg_match_points;
+    msg_match_points.header.stamp = ros::Time(current_kf_attribute.time_stamp);
+    for (int i = 0; i < (int)matched_2d_old_norm.size(); i++) {
+      geometry_msgs::Point32 p;
+      p.x = matched_2d_old_norm[i].x;
+      p.y = matched_2d_old_norm[i].y;
+      p.z = matched_id[i];
+      msg_match_points.points.push_back(p);
+    }
+    Eigen::Vector3d T = old_kf_attribute.position;
+    Eigen::Matrix3d R = old_kf_attribute.rotation;
+    Quaterniond Q(R);
+    sensor_msgs::ChannelFloat32 t_q_index;
+    t_q_index.values.push_back(T.x());
+    t_q_index.values.push_back(T.y());
+    t_q_index.values.push_back(T.z());
+    t_q_index.values.push_back(Q.w());
+    t_q_index.values.push_back(Q.x());
+    t_q_index.values.push_back(Q.y());
+    t_q_index.values.push_back(Q.z());
+    t_q_index.values.push_back(current_kf_attribute.index);
+    msg_match_points.channels.push_back(t_q_index);
+    pub_match_points_.publish(msg_match_points);
+  }
 }
+
 void PoseGraphNode::OnPoseGraphOptimization(
     std::vector<KeyFrame::Attributes> kf_attributes) {
-  // TODO: Implement this
+  ROS_INFO("On Pose graph optimization");
+  std::vector<KeyFrame::Attributes>::iterator it;
+  int sequence_cnt = GetCurrentPoseGraphSequenceCount();
+  for (int i = 1; i <= sequence_cnt; i++) {
+    path_[i].poses.clear();
+  }
+  base_path_.poses.clear();
+  posegraph_visualization_->reset();
+
+  if (save_loop_path) {
+    std::ofstream loop_path_file_tmp(vins_result_path_, ios::out);
+    loop_path_file_tmp.close();
+  }
+
+  for (it = kf_attributes.begin(); it != kf_attributes.end(); it++) {
+    Eigen::Quaterniond Q;
+    Q = it->rotation;
+    //        printf("path p: %f, %f, %f\n",  P.x(),  P.z(),  P.y() );
+
+    geometry_msgs::PoseStamped pose_stamped;
+    pose_stamped.header.stamp = ros::Time(it->time_stamp);
+    pose_stamped.header.frame_id = "world";
+    pose_stamped.pose.position.x = it->position.x() + visualization_shift_x_;
+    pose_stamped.pose.position.y = it->position.y() + visualization_shift_y_;
+    pose_stamped.pose.position.z = it->position.z();
+    pose_stamped.pose.orientation.x = Q.x();
+    pose_stamped.pose.orientation.y = Q.y();
+    pose_stamped.pose.orientation.z = Q.z();
+    pose_stamped.pose.orientation.w = Q.w();
+    if (it->sequence == 0) {
+      base_path_.poses.push_back(pose_stamped);
+      base_path_.header = pose_stamped.header;
+    } else {
+      path_[it->sequence].poses.push_back(pose_stamped);
+      path_[it->sequence].header = pose_stamped.header;
+    }
+
+    if (save_loop_path && !vins_result_path_.empty()) {
+      std::ofstream loop_path_file(vins_result_path_, ios::app);
+      loop_path_file.setf(ios::fixed, ios::floatfield);
+      loop_path_file.precision(0);
+      loop_path_file << it->time_stamp * 1e9 << ",";
+      loop_path_file.precision(5);
+      loop_path_file << it->position.x() << "," << it->position.y() << ","
+                     << it->position.z() << "," << Q.w() << "," << Q.x() << ","
+                     << Q.y() << "," << Q.z() << "," << endl;
+      loop_path_file.close();
+    }
+
+    if (SHOW_S_EDGE) {
+      std::vector<KeyFrame::Attributes>::reverse_iterator rit =
+          kf_attributes.rbegin();
+      std::vector<KeyFrame::Attributes>::reverse_iterator lrit;
+      for (; rit != kf_attributes.rend(); rit++) {
+        if (rit->index == it->index) {
+          lrit = rit;
+          lrit++;
+          for (int i = 0; i < 4; i++) {
+            if (lrit == kf_attributes.rend()) break;
+            if (lrit->sequence == it->sequence) {
+              posegraph_visualization_->add_edge(it->position, lrit->position);
+            }
+            lrit++;
+          }
+          break;
+        }
+      }
+    }
+    if (SHOW_L_EDGE) {
+      if (it->has_loop && it->sequence == sequence_cnt) {
+        std::find_if(
+            kf_attributes.begin(), kf_attributes.end(),
+            [&](KeyFrame::Attributes& attr) {
+              if (attr.index == it->loop_index && it->sequence > 0) {
+                posegraph_visualization_->add_loopedge(
+                    it->position,
+                    attr.position + Vector3d(visualization_shift_x_,
+                                             visualization_shift_y_, 0));
+                return true;
+              }
+              return false;
+            });
+      }
+    }
+  }
+
+  Publish();
 }
+
 void PoseGraphNode::OnNewSequentialEdge(Vector3d p1, Vector3d p2) {
-  // TODO: Implement this
+  if (!SHOW_S_EDGE) return;
+  posegraph_visualization_->add_edge(p1, p2);
 }
+
 void PoseGraphNode::OnNewLoopEdge(Vector3d p1, Vector3d p2) {
-  // TODO: Implement this
+  if (!SHOW_L_EDGE) return;
+  p2 += Vector3d(visualization_shift_x_, visualization_shift_y_, 0);
+  posegraph_visualization_->add_loopedge(p1, p2);
 }
 
-void PoseGraphNode::ImuForwardCallback(const nav_msgs::OdometryConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::ImuForwardCallback(
+    const nav_msgs::OdometryConstPtr& forward_msg) {
+  if (!visualise_imu_forward_) return;
+
+  Vector3d vio_t(forward_msg->pose.pose.position.x,
+                 forward_msg->pose.pose.position.y,
+                 forward_msg->pose.pose.position.z);
+  Quaterniond vio_q;
+  vio_q.w() = forward_msg->pose.pose.orientation.w;
+  vio_q.x() = forward_msg->pose.pose.orientation.x;
+  vio_q.y() = forward_msg->pose.pose.orientation.y;
+  vio_q.z() = forward_msg->pose.pose.orientation.z;
+
+  auto pose_graph_world_vio = GetPoseGraphWorldVio();
+  vio_t =
+      pose_graph_world_vio.rotation * vio_t + pose_graph_world_vio.translation;
+  vio_q = pose_graph_world_vio.rotation * vio_q;
+
+  auto pose_graph_drift = GetPoseGraphDrift();
+  vio_t = pose_graph_drift.rotation * vio_t + pose_graph_drift.translation;
+  vio_q = pose_graph_drift.rotation * vio_q;
+
+  Vector3d vio_t_cam;
+  Quaterniond vio_q_cam;
+  vio_t_cam = vio_t + vio_q * imu_camera_pose_.translation;
+  vio_q_cam = vio_q * imu_camera_pose_.rotation;
+
+  camera_pose_vis_->reset();
+  camera_pose_vis_->add_pose(vio_t_cam, vio_q_cam);
+  camera_pose_vis_->publish_by(pub_camera_pose_visual_, forward_msg->header);
 }
 
-void PoseGraphNode::VioCallback(const nav_msgs::OdometryConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::VioCallback(const nav_msgs::OdometryConstPtr& pose_msg) {
+  // ROS_INFO("vio_callback!");
+  Vector3d vio_t(pose_msg->pose.pose.position.x, pose_msg->pose.pose.position.y,
+                 pose_msg->pose.pose.position.z);
+  Quaterniond vio_q;
+  vio_q.w() = pose_msg->pose.pose.orientation.w;
+  vio_q.x() = pose_msg->pose.pose.orientation.x;
+  vio_q.y() = pose_msg->pose.pose.orientation.y;
+  vio_q.z() = pose_msg->pose.pose.orientation.z;
+
+  auto pose_graph_world_vio = GetPoseGraphWorldVio();
+  vio_t =
+      pose_graph_world_vio.rotation * vio_t + pose_graph_world_vio.translation;
+  vio_q = pose_graph_world_vio.rotation * vio_q;
+
+  auto pose_graph_drift = GetPoseGraphDrift();
+  vio_t = pose_graph_drift.rotation * vio_t + pose_graph_drift.translation;
+  vio_q = pose_graph_drift.rotation * vio_q;
+
+  Vector3d vio_t_cam;
+  Quaterniond vio_q_cam;
+  vio_t_cam = vio_t + vio_q * imu_camera_pose_.translation;
+  vio_q_cam = vio_q * imu_camera_pose_.rotation;
+
+  if (!visualise_imu_forward_) {
+    camera_pose_vis_->reset();
+    camera_pose_vis_->add_pose(vio_t_cam, vio_q_cam);
+    camera_pose_vis_->publish_by(pub_camera_pose_visual_, pose_msg->header);
+  }
+
+  odometry_buffer_.push(vio_t_cam);
+  if (odometry_buffer_.size() > 10) {
+    odometry_buffer_.pop();
+  }
+
+  visualization_msgs::Marker key_odometrys;
+  key_odometrys.header = pose_msg->header;
+  key_odometrys.header.frame_id = "world";
+  key_odometrys.ns = "key_odometrys";
+  key_odometrys.type = visualization_msgs::Marker::SPHERE_LIST;
+  key_odometrys.action = visualization_msgs::Marker::ADD;
+  key_odometrys.pose.orientation.w = 1.0;
+  key_odometrys.lifetime = ros::Duration();
+
+  // static int key_odometrys_id = 0;
+  key_odometrys.id = 0;  // key_odometrys_id++;
+  key_odometrys.scale.x = 0.1;
+  key_odometrys.scale.y = 0.1;
+  key_odometrys.scale.z = 0.1;
+  key_odometrys.color.r = 1.0;
+  key_odometrys.color.a = 1.0;
+
+  for (unsigned int i = 0; i < odometry_buffer_.size(); i++) {
+    geometry_msgs::Point pose_marker;
+    Vector3d vio_t;
+    vio_t = odometry_buffer_.front();
+    odometry_buffer_.pop();
+    pose_marker.x = vio_t.x();
+    pose_marker.y = vio_t.y();
+    pose_marker.z = vio_t.z();
+    key_odometrys.points.push_back(pose_marker);
+    odometry_buffer_.push(vio_t);
+  }
+  pub_key_odometrys_.publish(key_odometrys);
+
+  if (!loop_closure_) {
+    geometry_msgs::PoseStamped pose_stamped;
+    pose_stamped.header = pose_msg->header;
+    pose_stamped.header.frame_id = "world";
+    pose_stamped.pose.position.x = vio_t.x();
+    pose_stamped.pose.position.y = vio_t.y();
+    pose_stamped.pose.position.z = vio_t.z();
+    no_loop_path_.header = pose_msg->header;
+    no_loop_path_.header.frame_id = "world";
+    no_loop_path_.poses.push_back(pose_stamped);
+    pub_vio_path_.publish(no_loop_path_);
+  }
 }
 
-void PoseGraphNode::ImageCallback(const sensor_msgs::ImageConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::ImageCallback(const sensor_msgs::ImageConstPtr& image_msg) {
+  // ROS_INFO("image_callback!");
+  if (!loop_closure_) return;
+  {
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+    image_buffer_.push(image_msg);
+  }
+  // printf(" image time %f \n", image_msg->header.stamp.toSec());
+
+  // detect unstable camera stream
+  // If we use gstreamer next time, this should be caught through as EOF or
+  // something similar using the gstreamer API
+  if (last_image_time_ == -1.0) {
+    last_image_time_ = image_msg->header.stamp.toSec();
+  } else if (image_msg->header.stamp.toSec() - last_image_time_ > 1.0 ||
+             image_msg->header.stamp.toSec() < last_image_time_) {
+    ROS_WARN("image discontinued! New sequence detected!");
+    NewSequence();
+  }
+  last_image_time_ = image_msg->header.stamp.toSec();
 }
 
-void PoseGraphNode::PoseCallback(const nav_msgs::OdometryConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::PoseCallback(const nav_msgs::OdometryConstPtr& pose_msg) {
+  // ROS_INFO("pose_callback!");
+  if (!loop_closure_) return;
+  {
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+
+    pose_buffer_.push(pose_msg);
+  }
+  /*
+  printf("pose t: %f, %f, %f   q: %f, %f, %f %f \n",
+  pose_msg->pose.pose.position.x, pose_msg->pose.pose.position.y,
+                                                     pose_msg->pose.pose.position.z,
+                                                     pose_msg->pose.pose.orientation.w,
+                                                     pose_msg->pose.pose.orientation.x,
+                                                     pose_msg->pose.pose.orientation.y,
+                                                     pose_msg->pose.pose.orientation.z);
+  */
 }
 
-void PoseGraphNode::ExtrinsicCallback(const nav_msgs::OdometryConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::ExtrinsicCallback(
+    const nav_msgs::OdometryConstPtr& pose_msg) {
+  std::lock_guard<std::mutex> lock(process_mutex_);
+  imu_camera_pose_.translation =
+      Vector3d(pose_msg->pose.pose.position.x, pose_msg->pose.pose.position.y,
+               pose_msg->pose.pose.position.z);
+  imu_camera_pose_.rotation = Quaterniond(pose_msg->pose.pose.orientation.w,
+                                          pose_msg->pose.pose.orientation.x,
+                                          pose_msg->pose.pose.orientation.y,
+                                          pose_msg->pose.pose.orientation.z)
+                                  .toRotationMatrix();
+  UpdatePoseGraphImuCameraPose(imu_camera_pose_);
 }
 
-void PoseGraphNode::PointCallback(const sensor_msgs::PointCloudConstPtr& msg) {
-  // TODO: Implement this
+void PoseGraphNode::PointCallback(
+    const sensor_msgs::PointCloudConstPtr& point_msg) {
+  // ROS_INFO("point_callback!");
+  if (!loop_closure_) return;
+  {
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+    point_buffer_.push(point_msg);
+  }
+  /*
+  for (unsigned int i = 0; i < point_msg->points.size(); i++)
+  {
+      printf("%d, 3D point: %f, %f, %f 2D point %f, %f \n",i ,
+  point_msg->points[i].x, point_msg->points[i].y, point_msg->points[i].z,
+                                                   point_msg->channels[i].values[0],
+                                                   point_msg->channels[i].values[1]);
+  }
+  */
 }
 
 void PoseGraphNode::ReloRelativePoseCallback(
-    const nav_msgs::OdometryConstPtr& msg) {
-  // TODO: Implement this
+    const nav_msgs::OdometryConstPtr& pose_msg) {
+  Vector3d relative_t =
+      Vector3d(pose_msg->pose.pose.position.x, pose_msg->pose.pose.position.y,
+               pose_msg->pose.pose.position.z);
+  Quaterniond relative_q;
+  relative_q.w() = pose_msg->pose.pose.orientation.w;
+  relative_q.x() = pose_msg->pose.pose.orientation.x;
+  relative_q.y() = pose_msg->pose.pose.orientation.y;
+  relative_q.z() = pose_msg->pose.pose.orientation.z;
+  double relative_yaw = pose_msg->twist.twist.linear.x;
+  int index = pose_msg->twist.twist.linear.y;
+  // printf("receive index %d \n", index );
+  Eigen::Matrix<double, 8, 1> loop_info;
+  loop_info << relative_t.x(), relative_t.y(), relative_t.z(), relative_q.w(),
+      relative_q.x(), relative_q.y(), relative_q.z(), relative_yaw;
+  UpdateKeyFrameLoop(index, loop_info);
 }
 }  // namespace pose_graph
 

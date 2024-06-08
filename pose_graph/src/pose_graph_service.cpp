@@ -9,9 +9,6 @@
 #include "pose_graph/pose_graph_service.hpp"
 
 namespace pose_graph {
-PoseGraphService::PoseGraphService(PoseGraphConfig &config)
-    : pose_graph_(std::make_unique<PoseGraph>(config)), config_(config) {}
-
 PoseGraphService::~PoseGraphService() {
   keep_running_ = false;
   if (optimization_thread_.joinable()) {
@@ -19,7 +16,19 @@ PoseGraphService::~PoseGraphService() {
   }
 }
 
+void PoseGraphService::InitialiseWithConfig(PoseGraphConfig &config,
+                                            camodocal::CameraPtr camera) {
+  config_ = config;
+  pose_graph_ = std::make_unique<PoseGraph>(config, camera);
+  StartOptimizationThread();
+}
+
 bool PoseGraphService::LoadPoseGraph() {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return false;
+  }
+
   // Load previously saved pose graph from file
   TicToc clock;
   FILE *pFile;
@@ -38,13 +47,18 @@ bool PoseGraphService::LoadPoseGraph() {
   KeyFrame::Attributes current_kf_attribute;
   std::vector<cv::Point2f> matched_2d_old_norm;
   std::vector<double> matched_id;
-  while (pose_graph_->LoadSingleConfigEntry(pFile, old_kf_attribute,
-                                            current_kf_attribute,
-                                            matched_2d_old_norm, matched_id)) {
+  cv::Mat current_kf_thumb_image;
+  int count = 0;
+  while (pose_graph_->LoadSingleConfigEntry(
+      pFile, old_kf_attribute, current_kf_attribute, matched_2d_old_norm,
+      matched_id, current_kf_thumb_image)) {
     if (old_kf_attribute.time_stamp >= 0.0) {
       OnKeyFrameConnectionFound(current_kf_attribute, old_kf_attribute,
-                                matched_2d_old_norm, matched_id);
+                                matched_2d_old_norm, matched_id,
+                                current_kf_thumb_image);
     }
+    OnKeyFrameLoaded(current_kf_attribute, count);
+    count++;
   }
 
   fclose(pFile);
@@ -57,11 +71,20 @@ bool PoseGraphService::LoadPoseGraph() {
 }
 
 void PoseGraphService::SavePoseGraph() {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return;
+  }
   pose_graph_->Save();
   OnPoseGraphSaved();
 }
 
 void PoseGraphService::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return;
+  }
+
   KeyFrame *old_keyframe = nullptr;
   std::vector<cv::Point2f> matched_2d_old_norm;
   std::vector<double> matched_id;
@@ -69,9 +92,10 @@ void PoseGraphService::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
                            matched_id);
 
   if (old_keyframe != nullptr) {
+    cv::Mat image = current_keyframe->getThumbImage();
     OnKeyFrameConnectionFound(current_keyframe->getAttributes(),
                               old_keyframe->getAttributes(),
-                              matched_2d_old_norm, matched_id);
+                              matched_2d_old_norm, matched_id, image);
   }
 
   // Show sequential edge
@@ -101,12 +125,7 @@ void PoseGraphService::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
     current_keyframe->getPose(P0, R0);
     if (current_keyframe->sequence > 0) {
       // printf("add loop into visual \n");
-      OnNewLoopEdge(
-          P0, connected_kf_attributes.position +
-                  Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
-
-      // posegraph_visualization->add_loopedge(P0, connected_P +
-      // Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0));
+      OnNewLoopEdge(P0, connected_kf_attributes.position);
     }
   }
 
@@ -114,16 +133,57 @@ void PoseGraphService::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
   OnKeyFrameAdded(current_keyframe->getAttributes());
 }
 
+void PoseGraphService::UpdatePoseGraphImuCameraPose(
+    const PoseGraph::Pose &imu_camera_pose) {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return;
+  }
+  pose_graph_->UpdateImuCameraPose(imu_camera_pose);
+}
+
 int PoseGraphService::GetCurrentPoseGraphSequenceCount() const {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return -1;
+  }
   return pose_graph_->GetCurrentSequenceCount();
+}
+
+PoseGraph::Pose PoseGraphService::GetPoseGraphWorldVio() const {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return PoseGraph::Pose();
+  }
+  return pose_graph_->GetWorldVio();
+}
+
+PoseGraph::Drift PoseGraphService::GetPoseGraphDrift() const {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return PoseGraph::Drift();
+  }
+  return pose_graph_->GetDrift();
 }
 
 void PoseGraphService::UpdateKeyFrameLoop(
     const int &index, const Eigen::Matrix<double, 8, 1> &loop_info) {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return;
+  }
+
   pose_graph_->UpdateKeyFrameLoop(index, loop_info);
 }
 
 void PoseGraphService::StartOptimizationThread() {
+  if (!pose_graph_) {
+    printf("pose graph is not initialized \n");
+    return;
+  }
+
+  printf("Optimization thread started. \n");
+
   // Start optimization thread
   optimization_thread_ = std::thread([this]() {
     while (keep_running_) {

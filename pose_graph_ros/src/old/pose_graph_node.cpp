@@ -18,7 +18,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
 
-#include "pose_graph/keyframe.h"
+#include "pose_graph/details/keyframe.h"
 #include "pose_graph/parameters.h"
 #include "pose_graph/pose_graph.h"
 #include "pose_graph/utility/tic_toc.h"

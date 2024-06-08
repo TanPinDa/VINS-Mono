@@ -16,6 +16,7 @@
 
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <opencv2/opencv.hpp>
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -32,43 +33,45 @@ class PoseGraphNode : public PoseGraphService {
   ~PoseGraphNode();
 
  private:
-  void Initialize();
+  bool Initialize();
   bool ReadParameters();
   void StartPublishersAndSubscribers();
   void StartBackgroundThreads();
   void Process();
   void Command();
   void Publish();
+  void NewSequence();
 
   // PoseGraphService callbacks
   void OnPoseGraphLoaded() final;
   void OnPoseGraphSaved() final;
   void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) final;
+  void OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute, int count) final;
   void OnKeyFrameConnectionFound(KeyFrame::Attributes current_kf_attribute,
                                  KeyFrame::Attributes old_kf_attribute,
                                  std::vector<cv::Point2f> matched_2d_old_norm,
-                                 std::vector<double> matched_id) final;
+                                 std::vector<double> matched_id,
+                                 cv::Mat& thumb_image) final;
   void OnPoseGraphOptimization(
       std::vector<KeyFrame::Attributes> kf_attributes) final;
   void OnNewSequentialEdge(Vector3d p1, Vector3d p2) final;
   void OnNewLoopEdge(Vector3d p1, Vector3d p2) final;
 
   // ros callbacks
-  void ImuForwardCallback(const nav_msgs::OdometryConstPtr& msg);
-  void VioCallback(const nav_msgs::OdometryConstPtr& msg);
-  void ImageCallback(const sensor_msgs::ImageConstPtr& msg);
-  void PoseCallback(const nav_msgs::OdometryConstPtr& msg);
-  void ExtrinsicCallback(const nav_msgs::OdometryConstPtr& msg);
-  void PointCallback(const sensor_msgs::PointCloudConstPtr& msg);
-  void ReloRelativePoseCallback(const nav_msgs::OdometryConstPtr& msg);
+  void ImuForwardCallback(const nav_msgs::OdometryConstPtr& forward_msg);
+  void VioCallback(const nav_msgs::OdometryConstPtr& pose_msg);
+  void ImageCallback(const sensor_msgs::ImageConstPtr& image_msg);
+  void PoseCallback(const nav_msgs::OdometryConstPtr& pose_msg);
+  void ExtrinsicCallback(const nav_msgs::OdometryConstPtr& pose_msg);
+  void PointCallback(const sensor_msgs::PointCloudConstPtr& point_msg);
+  void ReloRelativePoseCallback(const nav_msgs::OdometryConstPtr& pose_msg);
 
  private:
-  ros::NodeHandle nh_("~");
+  ros::NodeHandle nh_{"~"};
   PoseGraphConfig config_;
-  std::unique_ptr<PoseGraphService> pose_graph_service_;
-  CameraPoseVisualization camera_pose_vis_;
+  std::unique_ptr<CameraPoseVisualization> camera_pose_vis_;
   bool loop_closure_;
-  camodocal::CameraPtr camera_;
+  camodocal::CameraPtr camera_;  // Note: internally it uses a shared pointer.
   bool visualise_imu_forward_;
   std::queue<sensor_msgs::ImageConstPtr> image_buffer_;
   std::queue<sensor_msgs::PointCloudConstPtr> point_buffer_;
@@ -76,9 +79,12 @@ class PoseGraphNode : public PoseGraphService {
   std::queue<Eigen::Vector3d> odometry_buffer_;
   std::mutex buffer_mutex_;
   std::mutex process_mutex_;
-  Eigen::Vector3d last_t_(-100, -100, -100);
+  Eigen::Vector3d last_t_ = {-100, -100, -100};
+  std::string vins_result_path_;
+  std::string image_topic_;
   nav_msgs::Path path_[10];
   nav_msgs::Path base_path_;
+  nav_msgs::Path no_loop_path_;
   std::unique_ptr<CameraPoseVisualization> posegraph_visualization_;
 
   // ros parameters
@@ -93,6 +99,7 @@ class PoseGraphNode : public PoseGraphService {
   int skip_first_cnt_ = 0;
   int frame_index_ = 0;
   int sequence_index_ = 1;
+  double last_image_time_ = -1.0;  // TODO: consider using chrono timepoint
   PoseGraph::Pose imu_camera_pose_;
   std::thread measurement_thread_;
   std::thread keyboard_command_thread_;

@@ -189,7 +189,8 @@ struct FourDOFWeightError {
 };
 }  // namespace
 
-PoseGraph::PoseGraph(const PoseGraphConfig& config) : config_(config) {
+PoseGraph::PoseGraph(const PoseGraphConfig& config, camodocal::CameraPtr camera)
+    : config_(config), camera_(camera) {
   LoadVocabulary();
 }
 
@@ -197,7 +198,7 @@ bool PoseGraph::LoadSingleConfigEntry(
     FILE* pFile, KeyFrame::Attributes& old_kf_attribute,
     KeyFrame::Attributes& current_kf_attribute,
     std::vector<cv::Point2f>& matched_2d_old_norm,
-    std::vector<double>& matched_id) {
+    std::vector<double>& matched_id, cv::Mat& current_kf_thumb_image) {
   int index;
   double time_stamp;
   double VIO_Tx, VIO_Ty, VIO_Tz;
@@ -292,14 +293,16 @@ bool PoseGraph::LoadSingleConfigEntry(
   std::shared_ptr<KeyFrame> keyframe = std::make_shared<KeyFrame>(
       time_stamp, index, vio_translation, vio_rotation, pose_graph_translation,
       pose_graph_rotation, image, loop_index, loop_info, keypoints,
-      keypoints_norm, brief_descriptors, config_.image_rows,
-      config_.image_cols, config_.brief_pattern_file_path);
+      keypoints_norm, brief_descriptors, config_.image_rows, config_.image_cols,
+      config_.brief_pattern_file_path, config_.save_debug_image);
   KeyFrame* old_keyframe = nullptr;
   LoadKeyFrame(keyframe, old_keyframe, matched_2d_old_norm, matched_id);
   current_kf_attribute = keyframe->getAttributes();
   if (old_keyframe != nullptr) {
     old_kf_attribute = old_keyframe->getAttributes();
   }
+
+  current_kf_thumb_image = keyframe->getThumbImage();
 
   return true;
 }
@@ -406,8 +409,9 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
       throw std::runtime_error("AddKeyFrame(): loop index not found");
     }
 
-    if (current_keyframe->findConnection(old_keyframe, matched_2d_old_norm,
-                                         matched_id)) {
+    if (current_keyframe->findConnection(
+            old_keyframe, matched_2d_old_norm, matched_id,
+            imu_camera_pose_.translation, imu_camera_pose_.rotation)) {
       if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
         earliest_loop_index = loop_index;
       }
@@ -499,8 +503,9 @@ void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
     }
     std::vector<cv::Point2f> matched_2d_old_norm;
     std::vector<double> matched_id;
-    if (current_keyframe->findConnection(old_keyframe, matched_2d_old_norm,
-                                         matched_id)) {
+    if (current_keyframe->findConnection(
+            old_keyframe, matched_2d_old_norm, matched_id,
+            imu_camera_pose_.translation, imu_camera_pose_.rotation)) {
       if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
         earliest_loop_index = loop_index;
       }
@@ -556,11 +561,18 @@ void PoseGraph::UpdateKeyFrameLoop(
   }
 }
 
+void PoseGraph::UpdateImuCameraPose(const Pose& imu_camera_pose) {
+  std::lock_guard<std::mutex> lock(imu_camera_pose_mutex_);
+  imu_camera_pose_ = imu_camera_pose;
+}
+
 int PoseGraph::GetCurrentSequenceCount() const {
   return current_sequence_count_;
 }
 
 PoseGraph::Drift PoseGraph::GetDrift() const { return drift_; }
+
+PoseGraph::Pose PoseGraph::GetWorldVio() const { return world_vio_; }
 
 KeyFrame::Attributes PoseGraph::GetKeyFrameAttribute(int index) const {
   std::lock_guard<std::mutex> lock(keyframes_mutex_);
@@ -682,6 +694,11 @@ void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe) {
   }
 
   db_.add(keyframe->brief_descriptors);
+}
+
+PoseGraph::Pose PoseGraph::GetImuCameraPose() const {
+  std::lock_guard<std::mutex> lock(imu_camera_pose_mutex_);
+  return imu_camera_pose_;
 }
 
 void PoseGraph::Optimize4DoF() {

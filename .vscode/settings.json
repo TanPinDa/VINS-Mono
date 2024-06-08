@@ -67,7 +67,9 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "bitset": "cpp"
+        "bitset": "cpp",
+        "shared_mutex": "cpp",
+        "*.ipp": "cpp"
     },
     "cmake.sourceDirectory": "/home/rosdev/workspace/ros_ws/src/VINS-Mono/benchmark_publisher",
     "C_Cpp.clang_format_fallbackStyle": "Google",
