@@ -32,19 +32,11 @@ class FeatureTracker
 
     void readImage(const cv::Mat &_img,double _cur_time,const bool &detect_new_feature_points);
 
-    void setMask();
-
-    void addPoints();
-
     bool updateID(unsigned int i);
 
     void readIntrinsicParameter(const string &calib_file);
 
     void showUndistortion(const string &name);
-
-    void rejectWithF();
-
-    void undistortedPoints();
 
     cv::Mat mask;
     cv::Mat fisheye_mask;
@@ -61,4 +53,9 @@ class FeatureTracker
     double prev_time;
 
     static int n_id;
+
+  private:
+      void undistortedPoints();
+      void rejectWithF();
+      void setMask();
 };
