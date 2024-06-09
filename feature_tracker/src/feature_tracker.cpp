@@ -113,7 +113,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
 
     if (forw_img.empty())
     {
-        prev_img = cur_img = img;
+        cur_img = img;
     }
     forw_img = img;
 
@@ -128,7 +128,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         for (int i = 0; i < int(forw_pts.size()); i++)
             if (status[i] && !inBorder(forw_pts[i],COL,ROW,1))
                 status[i] = 0;
-        FilterPoints(previous_points, status);
         FilterPoints(current_points, status);
         FilterPoints(forw_pts, status);
         FilterFeatureIds(feature_ids, status);
@@ -174,8 +173,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         }
         spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     }
-    prev_img = cur_img;
-    previous_points = current_points;
     previous_undistorted_points = current_undistorted_points;
     cur_img = forw_img;
     current_points = forw_pts;
@@ -207,7 +204,6 @@ void FeatureTracker::rejectWithF()
         vector<uchar> status;
         cv::findFundamentalMat(un_cur_pts, un_forw_pts, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
         int size_a = current_points.size();
-        FilterPoints(previous_points, status);
         FilterPoints(current_points, status);
         FilterPoints(forw_pts, status);
         FilterPoints(current_undistorted_points, status);
