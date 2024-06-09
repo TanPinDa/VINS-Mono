@@ -173,7 +173,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         }
         spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     }
-    previous_undistorted_points = current_undistorted_points;
     cur_img = forw_img;
     current_points = forw_pts;
     undistortedPoints();
