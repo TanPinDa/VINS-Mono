@@ -139,7 +139,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         for (int i = 0; i < NUM_OF_CAM; i++)
         {
             auto &un_pts = trackerData[i].current_undistorted_points;
-            auto &cur_pts = trackerData[i].previous_points;
+            auto &cur_pts = trackerData[i].current_points;
             auto &ids = trackerData[i].feature_ids;
             auto &pts_velocity = trackerData[i].pts_velocity;
             for (unsigned int j = 0; j < ids.size(); j++)
@@ -187,10 +187,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
                 cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
 
-                for (unsigned int j = 0; j < trackerData[i].previous_points.size(); j++)
+                for (unsigned int j = 0; j < trackerData[i].current_points.size(); j++)
                 {
                     double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
-                    cv::circle(tmp_img, trackerData[i].previous_points[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
+                    cv::circle(tmp_img, trackerData[i].current_points[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     //draw speed line
                     /*
                     Vector2d tmp_cur_un_pts (trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
@@ -200,11 +200,11 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     tmp_prev_un_pts.z() = 1;
                     Vector2d tmp_prev_uv;
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
-                    cv::line(tmp_img, trackerData[i].previous_points[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0), 1 , 8, 0);
+                    cv::line(tmp_img, trackerData[i].current_points[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0), 1 , 8, 0);
                     */
                     //char name[10];
                     //sprintf(name, "%d", trackerData[i].ids[j]);
-                    //cv::putText(tmp_img, name, trackerData[i].previous_points[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                    //cv::putText(tmp_img, name, trackerData[i].current_points[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }
             //cv::imshow("vis", stereo_img);
