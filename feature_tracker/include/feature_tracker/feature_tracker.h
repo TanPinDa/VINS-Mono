@@ -40,8 +40,8 @@ class FeatureTracker
 
     cv::Mat mask;
     cv::Mat fisheye_mask;
-    cv::Mat  cur_img, forw_img;
-    vector<cv::Point2f> current_points, forw_pts;
+    cv::Mat  previous_img, current_image;
+    vector<cv::Point2f> previous_points, current_points;
     vector<cv::Point2f> current_undistorted_points;
     vector<cv::Point2f> pts_velocity;
     vector<int> feature_ids;
