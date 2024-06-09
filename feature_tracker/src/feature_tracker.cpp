@@ -94,12 +94,11 @@ void FeatureTracker::setMask()
     }
 }
 
-void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool &detect_new_feature_points)
+void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time, const bool &detect_new_feature_points)
 {
-    cv::Mat img;
     TicToc t_r;
-    cur_time = _cur_time;
-    current_points.clear();
+
+    cv::Mat img;
 
     if (EQUALIZE)
     {
@@ -115,6 +114,15 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
     {
         previous_img = img;
     }
+    else
+        previous_img = current_image;
+
+    previous_points = current_points;
+    previous_undistorted_points_by_id = current_undistorted_points_by_id;
+    prev_time = cur_time;
+
+    cur_time = _cur_time;
+    current_points.clear();
     current_image = img;
 
     if (previous_points.size() > 0)
@@ -126,7 +134,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         cv::calcOpticalFlowPyrLK(previous_img, current_image, previous_points, current_points, status, err, cv::Size(21, 21), 3);
 
         for (int i = 0; i < int(current_points.size()); i++)
-            if (status[i] && !inBorder(current_points[i],COL,ROW,1))
+            if (status[i] && !inBorder(current_points[i], COL, ROW, 1))
                 status[i] = 0;
         FilterPoints(previous_points, status);
         FilterPoints(current_points, status);
@@ -174,11 +182,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     }
     undistortedPoints();
-    previous_img = current_image;
-    previous_points = current_points;
-    
-    previous_undistorted_points_by_id = current_undistorted_points_by_id;
-    prev_time = cur_time;
 }
 
 void FeatureTracker::rejectWithF()
@@ -316,5 +319,4 @@ void FeatureTracker::undistortedPoints()
             pts_velocity.push_back(cv::Point2f(0, 0));
         }
     }
-    
 }
