@@ -173,9 +173,10 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
         }
         spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     }
+    undistortedPoints();
     previous_img = current_image;
     previous_points = current_points;
-    undistortedPoints();
+    
     previous_undistorted_points_by_id = current_undistorted_points_by_id;
     prev_time = cur_time;
 }
@@ -273,9 +274,9 @@ void FeatureTracker::undistortedPoints()
     current_undistorted_points.clear();
     current_undistorted_points_by_id.clear();
     // cv::undistortPoints(previous_points, un_pts, K, cv::Mat());
-    for (unsigned int i = 0; i < previous_points.size(); i++)
+    for (unsigned int i = 0; i < current_points.size(); i++)
     {
-        Eigen::Vector2d a(previous_points[i].x, previous_points[i].y);
+        Eigen::Vector2d a(current_points[i].x, current_points[i].y);
         Eigen::Vector3d b;
         m_camera->liftProjective(a, b);
         current_undistorted_points.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
