@@ -176,6 +176,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time,const bool 
     previous_img = current_image;
     previous_points = current_points;
     undistortedPoints();
+    previous_undistorted_points_by_id = current_undistorted_points_by_id;
     prev_time = cur_time;
 }
 
@@ -314,5 +315,5 @@ void FeatureTracker::undistortedPoints()
             pts_velocity.push_back(cv::Point2f(0, 0));
         }
     }
-    previous_undistorted_points_by_id = current_undistorted_points_by_id;
+    
 }
