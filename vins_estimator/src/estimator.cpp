@@ -5,6 +5,8 @@
 Estimator::Estimator() : f_manager{orientation}
 {
     spdlog::info("init begins");
+    tmp_pre_integration = nullptr;
+    last_marginalization_info = nullptr;
     clearState();
 }
 
@@ -66,6 +68,7 @@ void Estimator::clearState()
 
     if (tmp_pre_integration != nullptr)
         delete tmp_pre_integration;
+
     if (last_marginalization_info != nullptr)
         delete last_marginalization_info;
 
