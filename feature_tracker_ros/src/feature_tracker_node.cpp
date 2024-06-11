@@ -100,10 +100,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             if (EQUALIZE)
             {
                 cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-                clahe->apply(show_img.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].previous_img);
+                clahe->apply(show_img.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].current_image);
             }
             else
-                trackerData[i].previous_img = show_img.rowRange(ROW * i, ROW * (i + 1));
+                trackerData[i].current_image = show_img.rowRange(ROW * i, ROW * (i + 1));
         }
 
 #if SHOW_UNDISTORTION
