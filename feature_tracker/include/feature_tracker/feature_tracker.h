@@ -40,22 +40,23 @@ class FeatureTracker
 
     cv::Mat mask;
     cv::Mat fisheye_mask;
-    cv::Mat  previous_img, current_image;
-    vector<cv::Point2f> previous_points, current_points;
+    cv::Mat current_image;
+    vector<cv::Point2f> current_points;
     vector<cv::Point2f> current_undistorted_points;
     vector<cv::Point2f> pts_velocity;
     vector<int> feature_ids;
     vector<int> track_cnt;
-    map<int, cv::Point2f> current_undistorted_points_by_id;
-    map<int, cv::Point2f> previous_undistorted_points_by_id;
-    camodocal::CameraPtr m_camera;
-    double cur_time;
-    double prev_time;
-
     static int n_id;
 
   private:
       void undistortedPoints();
       void rejectWithF();
       void setMask();
+      cv::Mat previous_img;
+      vector<cv::Point2f> previous_points;
+      map<int, cv::Point2f> current_undistorted_points_by_id;
+      map<int, cv::Point2f> previous_undistorted_points_by_id;
+      camodocal::CameraPtr m_camera;
+      double cur_time;
+      double prev_time;
 };
