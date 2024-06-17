@@ -33,7 +33,6 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     bool is_publish_this_frame = false;
     current_image_time = img_msg->header.stamp.toSec();
-    ROS_WARN_STREAM(FREQ <<"" << current_image_time << " " << first_image_time << " " << image_publishing_period_s);
     if (first_image_flag)
     {
         first_image_flag = false;
