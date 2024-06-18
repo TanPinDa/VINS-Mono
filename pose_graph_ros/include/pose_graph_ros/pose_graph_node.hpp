@@ -23,17 +23,17 @@
 #include <sensor_msgs/PointCloud.h>
 
 #include "camodocal/camera_models/CameraFactory.h"
-#include "pose_graph/pose_graph_service.hpp"
+#include "pose_graph/pose_graph.hpp"
 #include "pose_graph_ros/utility/CameraPoseVisualization.h"
 
 namespace pose_graph {
-class PoseGraphNode : public PoseGraphService {
+class PoseGraphNode : public PoseGraph {
  public:
   PoseGraphNode();
   ~PoseGraphNode();
 
  private:
-  bool Initialize();
+  bool InitializeNode();
   bool ReadParameters();
   void StartPublishersAndSubscribers();
   void StartBackgroundThreads();

@@ -16,6 +16,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "camodocal/camera_models/CameraFactory.h"
 #include <Eigen/Core>
@@ -49,16 +50,19 @@ class PoseGraph {
   };
 
  public:
-  PoseGraph(const PoseGraphConfig& config, camodocal::CameraPtr camera);
-  ~PoseGraph() = default;
-
+  PoseGraph();
+  ~PoseGraph();
+  void Initialize(const PoseGraphConfig& config, camodocal::CameraPtr camera);
+  bool LoadPoseGraph();
   bool LoadSingleConfigEntry(FILE* pFile,
                              KeyFrame::Attributes& old_kf_attribute,
                              KeyFrame::Attributes& current_kf_attribute,
                              std::vector<cv::Point2f>& matched_2d_old_norm,
                              std::vector<double>& matched_id,
                              cv::Mat& current_kf_thumb_image);
+  void SavePoseGraph();
   void Save();
+  void AddKeyFrameService(std::shared_ptr<KeyFrame> current_keyframe);
   void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
                    KeyFrame* old_keyframe,
                    std::vector<cv::Point2f>& matched_2d_old_norm,
@@ -108,6 +112,24 @@ class PoseGraph {
 
   BriefDatabase db_;
   std::unique_ptr<BriefVocabulary> vocabulary_;
+  std::atomic<bool> keep_running_{true};
+  std::thread optimization_thread_;
+ private:
+  void StartOptimizationThread();
+  virtual void OnPoseGraphLoaded() = 0;
+  virtual void OnPoseGraphSaved() = 0;
+  virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) = 0;
+  virtual void OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
+                                int count) = 0;
+  virtual void OnKeyFrameConnectionFound(
+      KeyFrame::Attributes current_kf_attribute,
+      KeyFrame::Attributes old_kf_attribute,
+      std::vector<cv::Point2f> matched_2d_old_norm,
+      std::vector<double> matched_id, cv::Mat& thumb_image) = 0;
+  virtual void OnPoseGraphOptimization(
+      std::vector<KeyFrame::Attributes> kf_attributes) = 0;
+  virtual void OnNewSequentialEdge(Vector3d p1, Vector3d p2) = 0;
+  virtual void OnNewLoopEdge(Vector3d p1, Vector3d p2) = 0;
 };
 }  // namespace pose_graph
 
