@@ -1,33 +1,32 @@
 #pragma once
 
-#include <thread>
+#include <atomic>
+#include <assert.h>
+#include <functional>
 #include <mutex>
-#include <opencv2/opencv.hpp>
-#include <eigen3/Eigen/Dense>
+#include <queue>
+#include <stdio.h>
 #include <string>
+#include <thread>
+#include <vector>
+#include <memory>
+
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
-#include <queue>
-#include <assert.h>
-#include <nav_msgs/Path.h>
-#include <geometry_msgs/PointStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <stdio.h>
-#include <ros/ros.h>
+#include <eigen3/Eigen/Dense>
+#include <opencv2/opencv.hpp>
+
 #include "keyframe.h"
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
-#include "utility/CameraPoseVisualization.h"
-#include "utility/tic_toc.h"
-#include "ThirdParty/DBoW/DBoW2.h"
-#include "ThirdParty/DVision/DVision.h"
-#include "ThirdParty/DBoW/TemplatedDatabase.h"
-#include "ThirdParty/DBoW/TemplatedVocabulary.h"
+#include "DBoW/DBoW2.h"
+#include "DVision.h"
+#include "DBoW/TemplatedDatabase.h"
+#include "DBoW/TemplatedVocabulary.h"
 
 
 #define SHOW_S_EDGE false
 #define SHOW_L_EDGE true
-#define SAVE_LOOP_PATH true
 
 using namespace DVision;
 using namespace DBoW2;
@@ -37,18 +36,20 @@ class PoseGraph
 public:
 	PoseGraph();
 	~PoseGraph();
-	void registerPub(ros::NodeHandle &n);
+	// void registerPub(ros::NodeHandle &n);
 	void addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
 	void loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
 	void loadVocabulary(std::string voc_path);
 	void updateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1 > &_loop_info);
 	KeyFrame* getKeyFrame(int index);
-	nav_msgs::Path path[10];
-	nav_msgs::Path base_path;
-	CameraPoseVisualization* posegraph_visualization;
+	int getCurrentSequenceCount();
 	void savePoseGraph();
 	void loadPoseGraph();
-	void publish();
+	void setOnKeyFrameLoadedCallback(std::function<void(KeyFrame*, int)> on_keyframe_loaded_cb);
+	void setOnOptimizationStepCompletedCallback(std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb);
+	void setOnNewEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_edge_cb);
+	void setOnNewLoopEdgeCallback(std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb);
+	void setOnKeyFrameConnectionFoundCallback(std::function<void(KeyFrame*, KeyFrame*, vector<cv::Point2f>&, vector<double>&)> on_keyframe_connection_found_cb);
 	Vector3d t_drift;
 	double yaw_drift;
 	Matrix3d r_drift;
@@ -61,7 +62,7 @@ private:
 	int detectLoop(KeyFrame* keyframe, int frame_index);
 	void addKeyFrameIntoVoc(KeyFrame* keyframe);
 	void optimize4DoF();
-	void updatePath();
+	// void updatePath();
 	list<KeyFrame*> keyframelist;
 	std::mutex m_keyframelist;
 	std::mutex m_optimize_buf;
@@ -71,7 +72,7 @@ private:
 	std::queue<int> optimize_buf;
 
 	int global_index;
-	int sequence_cnt;
+	std::atomic<int> sequence_cnt;
 	vector<bool> sequence_loop;
 	map<int, cv::Mat> image_pool;
 	int earliest_loop_index;
@@ -80,10 +81,12 @@ private:
 	BriefDatabase db;
 	BriefVocabulary* voc;
 
-	ros::Publisher pub_pg_path;
-	ros::Publisher pub_base_path;
-	ros::Publisher pub_pose_graph;
-	ros::Publisher pub_path[10];
+	// callbacks
+	std::function<void(KeyFrame*, int)> on_keyframe_loaded_cb_;
+	std::function<void(std::list<KeyFrame*>)> on_optimization_step_completed_cb_;
+	std::function<void(Vector3d, Vector3d)> on_new_edge_cb_;
+	std::function<void(Vector3d, Vector3d)> on_new_loopedge_cb_;
+	std::function<void(KeyFrame*, KeyFrame*, vector<cv::Point2f>&, vector<double>&)> on_keyframe_connection_found_cb_;
 };
 
 template <typename T>

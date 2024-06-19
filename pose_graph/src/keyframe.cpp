@@ -1,4 +1,7 @@
-#include "keyframe.h"
+#include "pose_graph/keyframe.h"
+
+#include "DBoW/DBoW2.h"
+#include "DVision.h"
 
 template <typename Derived>
 static void reduceVector(vector<Derived> &v, vector<uchar> status)
@@ -256,14 +259,13 @@ void KeyFrame::PnPRANSAC(const vector<cv::Point2f> &matched_2d_old_norm,
 }
 
 
-bool KeyFrame::findConnection(KeyFrame* old_kf)
+bool KeyFrame::findConnection(KeyFrame* old_kf, vector<cv::Point2f>& matched_2d_old_norm, vector<double>& matched_id)
 {
 	TicToc tmp_t;
 	//printf("find Connection\n");
 	vector<cv::Point2f> matched_2d_cur, matched_2d_old;
-	vector<cv::Point2f> matched_2d_cur_norm, matched_2d_old_norm;
+	vector<cv::Point2f> matched_2d_cur_norm;
 	vector<cv::Point3f> matched_3d;
-	vector<double> matched_id;
 	vector<uchar> status;
 
 	matched_3d = point_3d;
@@ -422,7 +424,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	            cv::Mat old_img = old_kf->image;
 	            cv::hconcat(image, gap_image, gap_image);
 	            cv::hconcat(gap_image, old_img, gray_img);
-	            cvtColor(gray_img, loop_match_img, CV_GRAY2RGB);
+	            cvtColor(gray_img, loop_match_img, cv::COLOR_GRAY2RGB);
 	            for(int i = 0; i< (int)matched_2d_cur.size(); i++)
 	            {
 	                cv::Point2f cur_pt = matched_2d_cur[i];
@@ -459,11 +461,15 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	            	cv::imshow("loop connection",loop_match_img);
 	            	cv::waitKey(10);
 	            	*/
-	            	cv::Mat thumbimage;
-	            	cv::resize(loop_match_img, thumbimage, cv::Size(loop_match_img.cols / 2, loop_match_img.rows / 2));
-	    	    	sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumbimage).toImageMsg();
-	                msg->header.stamp = ros::Time(time_stamp);
-	    	    	pub_match_img.publish(msg);
+					// reset thumbimage_
+					{
+						std::lock_guard<std::mutex> lock(m_thumbimage_);
+						thumbimage_ = cv::Mat();
+						cv::resize(loop_match_img, thumbimage_, cv::Size(loop_match_img.cols / 2, loop_match_img.rows / 2));
+					}
+					// sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumbimage).toImageMsg();
+	                // msg->header.stamp = ros::Time(time_stamp);
+	    	    	// pub_match_img.publish(msg);
 	            }
 	        }
 	    #endif
@@ -485,33 +491,34 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	    	loop_info << relative_t.x(), relative_t.y(), relative_t.z(),
 	    	             relative_q.w(), relative_q.x(), relative_q.y(), relative_q.z(),
 	    	             relative_yaw;
-	    	if(FAST_RELOCALIZATION)
-	    	{
-			    sensor_msgs::PointCloud msg_match_points;
-			    msg_match_points.header.stamp = ros::Time(time_stamp);
-			    for (int i = 0; i < (int)matched_2d_old_norm.size(); i++)
-			    {
-		            geometry_msgs::Point32 p;
-		            p.x = matched_2d_old_norm[i].x;
-		            p.y = matched_2d_old_norm[i].y;
-		            p.z = matched_id[i];
-		            msg_match_points.points.push_back(p);
-			    }
-			    Eigen::Vector3d T = old_kf->T_w_i;
-			    Eigen::Matrix3d R = old_kf->R_w_i;
-			    Quaterniond Q(R);
-			    sensor_msgs::ChannelFloat32 t_q_index;
-			    t_q_index.values.push_back(T.x());
-			    t_q_index.values.push_back(T.y());
-			    t_q_index.values.push_back(T.z());
-			    t_q_index.values.push_back(Q.w());
-			    t_q_index.values.push_back(Q.x());
-			    t_q_index.values.push_back(Q.y());
-			    t_q_index.values.push_back(Q.z());
-			    t_q_index.values.push_back(index);
-			    msg_match_points.channels.push_back(t_q_index);
-			    pub_match_points.publish(msg_match_points);
-	    	}
+	    	// if(FAST_RELOCALIZATION)
+	    	// {
+			//     sensor_msgs::PointCloud msg_match_points;
+			//     msg_match_points.header.stamp = ros::Time(time_stamp);
+			//     for (int i = 0; i < (int)matched_2d_old_norm.size(); i++)
+			//     {
+		    //         geometry_msgs::Point32 p;
+		    //         p.x = matched_2d_old_norm[i].x;
+		    //         p.y = matched_2d_old_norm[i].y;
+		    //         p.z = matched_id[i];
+		    //         msg_match_points.points.push_back(p);
+			//     }
+			//     Eigen::Vector3d T = old_kf->T_w_i;
+			//     Eigen::Matrix3d R = old_kf->R_w_i;
+			//     Quaterniond Q(R);
+			//     sensor_msgs::ChannelFloat32 t_q_index;
+			//     t_q_index.values.push_back(T.x());
+			//     t_q_index.values.push_back(T.y());
+			//     t_q_index.values.push_back(T.z());
+			//     t_q_index.values.push_back(Q.w());
+			//     t_q_index.values.push_back(Q.x());
+			//     t_q_index.values.push_back(Q.y());
+			//     t_q_index.values.push_back(Q.z());
+			//     t_q_index.values.push_back(index);
+			//     msg_match_points.channels.push_back(t_q_index);
+			// 	// TODO : move this out of class
+			//     pub_match_points.publish(msg_match_points);
+	    	// }
 	        return true;
 	    }
 	}
@@ -519,6 +526,11 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	return false;
 }
 
+cv::Mat KeyFrame::getThumbImage()
+{
+	std::lock_guard<std::mutex> lock(m_thumbimage_);
+	return thumbimage_.clone();
+}
 
 int KeyFrame::HammingDis(const BRIEF::bitset &a, const BRIEF::bitset &b)
 {

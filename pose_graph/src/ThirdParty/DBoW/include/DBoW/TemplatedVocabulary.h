@@ -23,10 +23,10 @@
 #include "BowVector.h"
 #include "ScoringObject.h"
 
-#include "../DUtils/DUtils.h"
+#include "DUtils.h"
 
 // Added by VINS [[[
-#include "../VocabularyBinary.hpp"
+#include "VocabularyBinary.hpp"
 #include <boost/dynamic_bitset.hpp>
 // Added by VINS ]]]
 

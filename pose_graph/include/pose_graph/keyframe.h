@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <vector>
 #include <eigen3/Eigen/Dense>
 #include <opencv2/opencv.hpp>
@@ -10,8 +11,7 @@
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
 #include "parameters.h"
-#include "ThirdParty/DBoW/DBoW2.h"
-#include "ThirdParty/DVision/DVision.h"
+#include "DBoW/FBrief.h"
 
 #define MIN_LOOP_NUM 25
 
@@ -38,7 +38,8 @@ public:
 	KeyFrame(double _time_stamp, int _index, Vector3d &_vio_T_w_i, Matrix3d &_vio_R_w_i, Vector3d &_T_w_i, Matrix3d &_R_w_i,
 			 cv::Mat &_image, int _loop_index, Eigen::Matrix<double, 8, 1 > &_loop_info,
 			 vector<cv::KeyPoint> &_keypoints, vector<cv::KeyPoint> &_keypoints_norm, vector<BRIEF::bitset> &_brief_descriptors);
-	bool findConnection(KeyFrame* old_kf);
+	bool findConnection(KeyFrame* old_kf, vector<cv::Point2f>& matched_2d_old_norm, vector<double>& matched_id);
+	cv::Mat getThumbImage();
 	void computeWindowBRIEFPoint();
 	void computeBRIEFPoint();
 	//void extractBrief();
@@ -100,5 +101,9 @@ public:
 	bool has_loop;
 	int loop_index;
 	Eigen::Matrix<double, 8, 1 > loop_info;
+
+	private:
+	cv::Mat thumbimage_;
+	std::mutex m_thumbimage_;
 };
 
