@@ -17,11 +17,11 @@ KeyFrame::KeyFrame(double _time_stamp, int _index, Vector3d &_vio_T_w_i,
                    vector<cv::Point3f> &_point_3d,
                    vector<cv::Point2f> &_point_2d_uv,
                    vector<cv::Point2f> &_point_2d_norm,
-                   vector<double> &_point_id, int _sequence, int image_rows,
-                   int image_cols, std::string brief_pattern_file_path,
+                   vector<double> &_point_id, int _sequence, int image_height,
+                   int image_width, std::string brief_pattern_file_path,
                    bool debug_image, camodocal::CameraPtr camera)
-    : image_rows_(image_rows),
-      image_cols_(image_cols),
+    : image_height_(image_height),
+      image_width_(image_width),
       brief_pattern_file_path_(brief_pattern_file_path),
       debug_image_(debug_image) {
   time_stamp = _time_stamp;
@@ -55,11 +55,11 @@ KeyFrame::KeyFrame(double _time_stamp, int _index, Vector3d &_vio_T_w_i,
                    Eigen::Matrix<double, 8, 1> &_loop_info,
                    vector<cv::KeyPoint> &_keypoints,
                    vector<cv::KeyPoint> &_keypoints_norm,
-                   vector<BRIEF::bitset> &_brief_descriptors, int image_rows,
-                   int image_cols, std::string brief_pattern_file_path,
+                   vector<BRIEF::bitset> &_brief_descriptors, int image_height,
+                   int image_width, std::string brief_pattern_file_path,
                    bool debug_image)
-    : image_rows_(image_rows),
-      image_cols_(image_cols),
+    : image_height_(image_height),
+      image_width_(image_width),
       brief_pattern_file_path_(brief_pattern_file_path),
       debug_image_(debug_image) {
   time_stamp = _time_stamp;
@@ -182,12 +182,12 @@ void KeyFrame::FundmantalMatrixRANSAC(
     for (int i = 0; i < (int)matched_2d_cur_norm.size(); i++) {
       double FOCAL_LENGTH = 460.0;
       double tmp_x, tmp_y;
-      tmp_x = FOCAL_LENGTH * matched_2d_cur_norm[i].x + image_cols_ / 2.0;
-      tmp_y = FOCAL_LENGTH * matched_2d_cur_norm[i].y + image_rows_ / 2.0;
+      tmp_x = FOCAL_LENGTH * matched_2d_cur_norm[i].x + image_width_ / 2.0;
+      tmp_y = FOCAL_LENGTH * matched_2d_cur_norm[i].y + image_height_ / 2.0;
       tmp_cur[i] = cv::Point2f(tmp_x, tmp_y);
 
-      tmp_x = FOCAL_LENGTH * matched_2d_old_norm[i].x + image_cols_ / 2.0;
-      tmp_y = FOCAL_LENGTH * matched_2d_old_norm[i].y + image_rows_ / 2.0;
+      tmp_x = FOCAL_LENGTH * matched_2d_old_norm[i].x + image_width_ / 2.0;
+      tmp_y = FOCAL_LENGTH * matched_2d_old_norm[i].y + image_height_ / 2.0;
       tmp_old[i] = cv::Point2f(tmp_x, tmp_y);
     }
     cv::findFundamentalMat(tmp_cur, tmp_old, cv::FM_RANSAC, 3.0, 0.9, status);
@@ -311,7 +311,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf,
 
     if (debug_image_) {
       int gap = 10;
-      cv::Mat gap_image(image_rows_, gap, CV_8UC1, cv::Scalar(255, 255, 255));
+      cv::Mat gap_image(image_height_, gap, CV_8UC1, cv::Scalar(255, 255, 255));
       cv::Mat gray_img, loop_match_img;
       cv::Mat old_img = old_kf->image;
       cv::hconcat(image, gap_image, gap_image);
@@ -323,16 +323,16 @@ bool KeyFrame::findConnection(KeyFrame *old_kf,
       }
       for (int i = 0; i < (int)matched_2d_old.size(); i++) {
         cv::Point2f old_pt = matched_2d_old[i];
-        old_pt.x += (image_cols_ + gap);
+        old_pt.x += (image_width_ + gap);
         cv::circle(loop_match_img, old_pt, 5, cv::Scalar(0, 255, 0));
       }
       for (int i = 0; i < (int)matched_2d_cur.size(); i++) {
         cv::Point2f old_pt = matched_2d_old[i];
-        old_pt.x += (image_cols_ + gap);
+        old_pt.x += (image_width_ + gap);
         cv::line(loop_match_img, matched_2d_cur[i], old_pt,
                  cv::Scalar(0, 255, 0), 2, 8, 0);
       }
-      cv::Mat notation(50, image_cols_ + gap + image_cols_, CV_8UC3, cv::Scalar(255, 255, 255));
+      cv::Mat notation(50, image_width_ + gap + image_width_, CV_8UC3, cv::Scalar(255, 255, 255));
       putText(notation,
               "current frame: " + to_string(index) +
                   "  sequence: " + to_string(sequence),
@@ -342,7 +342,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf,
       putText(notation,
               "previous frame: " + to_string(old_kf->index) +
                   "  sequence: " + to_string(old_kf->sequence),
-              cv::Point2f(20 + image_cols_ + gap, 30), cv::FONT_HERSHEY_SIMPLEX, 1,
+              cv::Point2f(20 + image_width_ + gap, 30), cv::FONT_HERSHEY_SIMPLEX, 1,
               cv::Scalar(255), 3);
       cv::vconcat(notation, loop_match_img, loop_match_img);
 

@@ -46,7 +46,7 @@ class KeyFrame {
            Matrix3d &_vio_R_w_i, cv::Mat &_image,
            vector<cv::Point3f> &_point_3d, vector<cv::Point2f> &_point_2d_uv,
            vector<cv::Point2f> &_point_2d_normal, vector<double> &_point_id,
-           int _sequence, int image_rows, int image_cols,
+           int _sequence, int image_height, int image_width,
            std::string brief_pattern_file_path, bool debug_image,
            camodocal::CameraPtr camera);
   KeyFrame(double _time_stamp, int _index, Vector3d &_vio_T_w_i,
@@ -55,8 +55,8 @@ class KeyFrame {
            Eigen::Matrix<double, 8, 1> &_loop_info,
            vector<cv::KeyPoint> &_keypoints,
            vector<cv::KeyPoint> &_keypoints_norm,
-           vector<BRIEF::bitset> &_brief_descriptors, int image_rows,
-           int image_cols, std::string brief_pattern_file_path,
+           vector<BRIEF::bitset> &_brief_descriptors, int image_height,
+           int image_width, std::string brief_pattern_file_path,
            bool debug_image);
   bool findConnection(KeyFrame *old_kf,
                       vector<cv::Point2f> &matched_2d_old_norm,
@@ -132,7 +132,7 @@ class KeyFrame {
  private:
   cv::Mat thumbimage_;
   std::mutex m_thumbimage_;
-  int image_rows_;
-  int image_cols_;
+  int image_height_;
+  int image_width_;
   bool debug_image_ = false;
 };

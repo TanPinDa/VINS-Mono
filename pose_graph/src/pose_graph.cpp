@@ -189,10 +189,6 @@ struct FourDOFWeightError {
 };
 }  // namespace
 
-PoseGraph::PoseGraph(){
-
-}
-
 PoseGraph::~PoseGraph() {
   keep_running_ = false;
   if (optimization_thread_.joinable()) {
@@ -200,18 +196,23 @@ PoseGraph::~PoseGraph() {
   }
 }
 
-void PoseGraph::Initialize(const PoseGraphConfig& config, camodocal::CameraPtr camera){
+void PoseGraph::Initialize(const PoseGraphConfig& config,
+                           camodocal::CameraPtr camera) {
   config_ = config;
   camera_ = camera;
   LoadVocabulary();
   StartOptimizationThread();
 }
-bool PoseGraph::LoadPoseGraph() {
 
+void PoseGraph::RegisterEventObserver(
+    std::shared_ptr<PoseGraphEventObserver> event_observer) {
+  event_observer_ = event_observer;
+}
 
+bool PoseGraph::Load() {
   // Load previously saved pose graph from file
   TicToc clock;
-  FILE *pFile;
+  FILE* pFile;
   std::string file_path = config_.saved_pose_graph_dir + "pose_graph.txt";
   printf("loading pose graph from: %s \n", file_path.c_str());
   printf("pose graph loading...\n");
@@ -229,15 +230,19 @@ bool PoseGraph::LoadPoseGraph() {
   std::vector<double> matched_id;
   cv::Mat current_kf_thumb_image;
   int count = 0;
-  while (LoadSingleConfigEntry(
-      pFile, old_kf_attribute, current_kf_attribute, matched_2d_old_norm,
-      matched_id, current_kf_thumb_image)) {
+  while (LoadSingleConfigEntry(pFile, old_kf_attribute, current_kf_attribute,
+                               matched_2d_old_norm, matched_id,
+                               current_kf_thumb_image)) {
     if (old_kf_attribute.time_stamp >= 0.0) {
-      OnKeyFrameConnectionFound(current_kf_attribute, old_kf_attribute,
-                                matched_2d_old_norm, matched_id,
-                                current_kf_thumb_image);
+      if (event_observer_) {
+        event_observer_->OnKeyFrameConnectionFound(
+            current_kf_attribute, old_kf_attribute, matched_2d_old_norm,
+            matched_id, current_kf_thumb_image);
+      }
     }
-    OnKeyFrameLoaded(current_kf_attribute, count);
+    if (event_observer_) {
+      event_observer_->OnKeyFrameLoaded(current_kf_attribute, count);
+    }
     count++;
   }
 
@@ -245,7 +250,9 @@ bool PoseGraph::LoadPoseGraph() {
   printf("pose graph loaded, time cost: %f s\n", clock.toc() / 1000);
 
   // Generic callback
-  OnPoseGraphLoaded();
+  if (event_observer_) {
+    event_observer_->OnPoseGraphLoaded();
+  }
 
   return true;
 }
@@ -349,8 +356,9 @@ bool PoseGraph::LoadSingleConfigEntry(
   std::shared_ptr<KeyFrame> keyframe = std::make_shared<KeyFrame>(
       time_stamp, index, vio_translation, vio_rotation, pose_graph_translation,
       pose_graph_rotation, image, loop_index, loop_info, keypoints,
-      keypoints_norm, brief_descriptors, config_.image_rows, config_.image_cols,
-      config_.brief_pattern_file_path, config_.save_debug_image);
+      keypoints_norm, brief_descriptors, config_.image_height,
+      config_.image_width, config_.brief_pattern_file_path,
+      config_.save_debug_image);
   KeyFrame* old_keyframe = nullptr;
   LoadKeyFrame(keyframe, old_keyframe, matched_2d_old_norm, matched_id);
   current_kf_attribute = keyframe->getAttributes();
@@ -362,7 +370,6 @@ bool PoseGraph::LoadSingleConfigEntry(
 
   return true;
 }
-
 
 void PoseGraph::Save() {
   // Save keyframes to file
@@ -424,23 +431,29 @@ void PoseGraph::Save() {
   fclose(pFile);
 
   printf("pose graph saved, time cost: %f s\n", clock.toc() / 1000);
-  OnPoseGraphSaved();
+
+  if (event_observer_) {
+    event_observer_->OnPoseGraphSaved();
+  }
 }
 
-void PoseGraph::AddKeyFrameService(std::shared_ptr<KeyFrame> current_keyframe) {
-
-
-  KeyFrame *old_keyframe = nullptr;
+void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
+  int old_keyframe_loop_index = -1;
   std::vector<cv::Point2f> matched_2d_old_norm;
   std::vector<double> matched_id;
-  AddKeyFrame(current_keyframe, old_keyframe, matched_2d_old_norm,
-                           matched_id);
+  AddKeyFrame(current_keyframe, old_keyframe_loop_index, matched_2d_old_norm, matched_id);
 
-  if (old_keyframe != nullptr) {
+  if (!event_observer_) {
+    // If no observer is registered, the rest of the function is not needed.
+    return;
+  }
+
+  if (old_keyframe_loop_index != -1) {
     cv::Mat image = current_keyframe->getThumbImage();
-    OnKeyFrameConnectionFound(current_keyframe->getAttributes(),
-                              old_keyframe->getAttributes(),
-                              matched_2d_old_norm, matched_id, image);
+    auto old_keyframe = GetKeyFrame(old_keyframe_loop_index);
+    event_observer_->OnKeyFrameConnectionFound(
+        current_keyframe->getAttributes(), old_keyframe->getAttributes(),
+        matched_2d_old_norm, matched_id, image);
   }
 
   // Show sequential edge
@@ -454,7 +467,7 @@ void PoseGraph::AddKeyFrameService(std::shared_ptr<KeyFrame> current_keyframe) {
     Vector3d connected_P;
     Matrix3d connected_R;
     if ((*rit).sequence == current_keyframe->sequence) {
-      OnNewSequentialEdge(P, (*rit).position);
+      event_observer_->OnNewSequentialEdge(P, (*rit).position);
     }
     rit++;
   }
@@ -470,16 +483,16 @@ void PoseGraph::AddKeyFrameService(std::shared_ptr<KeyFrame> current_keyframe) {
     current_keyframe->getPose(P0, R0);
     if (current_keyframe->sequence > 0) {
       // printf("add loop into visual \n");
-      OnNewLoopEdge(P0, connected_kf_attributes.position);
+      event_observer_->OnNewLoopEdge(P0, connected_kf_attributes.position);
     }
   }
 
   // Generic callback
-  OnKeyFrameAdded(current_keyframe->getAttributes());
+  event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes());
 }
 
 void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
-                            KeyFrame* old_keyframe,
+                            int& old_keyframe_loop_index,
                             std::vector<cv::Point2f>& matched_2d_old_norm,
                             std::vector<double>& matched_id) {
   // shift to base frame
@@ -505,15 +518,16 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
   current_keyframe->updateVioPose(vio_current_position, vio_current_rotation);
   // Assign the current global_keyframe_index_counter_, then increment it
   current_keyframe->index = global_keyframe_index_counter_++;
-  int loop_index = -1;
+  old_keyframe_loop_index = -1;
   if (config_.detect_loop_closure) {
-    loop_index = DetectLoopClosure(current_keyframe);
+    old_keyframe_loop_index = DetectLoopClosure(current_keyframe);
   } else {
     AddKeyFrameIntoVoc(current_keyframe);
   }
 
-  if (loop_index != -1) {
-    old_keyframe = GetKeyFrame(loop_index).get();
+  KeyFrame* old_keyframe = nullptr;
+  if (old_keyframe_loop_index != -1) {
+    old_keyframe = GetKeyFrame(old_keyframe_loop_index).get();
     if (old_keyframe == nullptr) {
       throw std::runtime_error("AddKeyFrame(): loop index not found");
     }
@@ -521,8 +535,8 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
     if (current_keyframe->findConnection(
             old_keyframe, matched_2d_old_norm, matched_id,
             imu_camera_pose_.translation, imu_camera_pose_.rotation)) {
-      if (earliest_loop_index > loop_index || earliest_loop_index == -1) {
-        earliest_loop_index = loop_index;
+      if (earliest_loop_index > old_keyframe_loop_index || earliest_loop_index == -1) {
+        earliest_loop_index = old_keyframe_loop_index;
       }
 
       Vector3d old_world_position, current_world_position, current_vio_position;
@@ -822,7 +836,7 @@ void PoseGraph::Optimize4DoF() {
     }
   }
   if (current_index != -1) {
-    printf("optimize pose graph \n");
+    // printf("optimize pose graph \n");
     ceres::Problem problem;
     int i = 0;
     list<std::shared_ptr<KeyFrame>>::iterator it;
@@ -983,7 +997,6 @@ void PoseGraph::Optimize4DoF() {
   }
 }
 void PoseGraph::StartOptimizationThread() {
-
   printf("Optimization thread started. \n");
 
   // Start optimization thread
@@ -992,7 +1005,9 @@ void PoseGraph::StartOptimizationThread() {
       // Perform optimization
       Optimize4DoF();
       auto kf_attributes = GetKeyFrameAttributes();
-      OnPoseGraphOptimization(kf_attributes);
+      if (event_observer_) {
+        event_observer_->OnPoseGraphOptimization(kf_attributes);
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
   });

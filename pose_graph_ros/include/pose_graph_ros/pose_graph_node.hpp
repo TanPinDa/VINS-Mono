@@ -24,25 +24,26 @@
 
 #include "camodocal/camera_models/CameraFactory.h"
 #include "pose_graph/pose_graph.hpp"
+#include "pose_graph/details/pose_graph_event_observer.hpp"
 #include "pose_graph_ros/utility/CameraPoseVisualization.h"
 
 namespace pose_graph {
-class PoseGraphNode : public PoseGraph {
+class PoseGraphNode : public PoseGraphEventObserver {
  public:
-  PoseGraphNode();
   ~PoseGraphNode();
 
+  bool Start();
+
  private:
-  bool InitializeNode();
   bool ReadParameters();
   void StartPublishersAndSubscribers();
-  void StartBackgroundThreads();
+  void StartCommandAndProcessingThreads();
   void Process();
   void Command();
   void Publish();
   void NewSequence();
 
-  // PoseGraphService callbacks
+  // PoseGraphEventObserver callbacks
   void OnPoseGraphLoaded() final;
   void OnPoseGraphSaved() final;
   void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) final;
@@ -69,6 +70,7 @@ class PoseGraphNode : public PoseGraph {
  private:
   ros::NodeHandle nh_{"~"};
   PoseGraphConfig config_;
+  PoseGraph pose_graph_ = PoseGraph();
   std::unique_ptr<CameraPoseVisualization> camera_pose_vis_;
   bool loop_closure_;
   camodocal::CameraPtr camera_;  // Note: internally it uses a shared pointer.

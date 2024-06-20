@@ -18,13 +18,6 @@
 #define SHOW_L_EDGE true
 
 namespace pose_graph {
-PoseGraphNode::PoseGraphNode() {
-  if (!InitializeNode()) {
-    ROS_ERROR("Failed to initialize PoseGraphNode");
-    ros::shutdown();
-  }
-  ROS_INFO("PoseGraphNode initialized");
-}
 
 PoseGraphNode::~PoseGraphNode() {
   ros::shutdown();
@@ -36,7 +29,7 @@ PoseGraphNode::~PoseGraphNode() {
   }
 }
 
-bool PoseGraphNode::InitializeNode() {
+bool PoseGraphNode::Start() {
   if (!ReadParameters()) {
     ROS_ERROR("Failed to read parameters");
     ros::shutdown();
@@ -51,9 +44,13 @@ bool PoseGraphNode::InitializeNode() {
     return false;
   }
 
-  double camera_visual_size = fs["visualize_camera_size"]; // Consider splitting the visualiser into a ros and non-ros segment. And the non ros configs go in the "CV config file"
+  double camera_visual_size =
+      fs["visualize_camera_size"];  // TODO: Consider splitting the visualiser
+                                    // into a ros and non-ros segment. And the
+                                    // non ros configs go in the "CV config
+                                    // file"
   camera_pose_vis_ =
-      std::make_unique<CameraPoseVisualization>(1.0, 0.0, 1.0, 1.0);
+      std::make_unique<CameraPoseVisualization>(1.0, 0.0, 0.0, 1.0);
   camera_pose_vis_->setScale(camera_visual_size);
   camera_pose_vis_->setLineWidth(camera_visual_size / 10.0);
 
@@ -66,10 +63,10 @@ bool PoseGraphNode::InitializeNode() {
 
   bool load_previous_pose_graph = false;
   if (loop_closure_) {
-    config_.image_rows = fs["image_height"]; // just call it image_height
-    config_.image_cols = fs["image_width"]; // just call it image_width
+    config_.image_height = fs["image_height"];
+    config_.image_width = fs["image_width"];
     std::string pkg_path = ros::package::getPath("pose_graph_ros");
-    // Good idea to expose this. I believe this is loading the BOW dictionary. Not in this PR
+    // TODO: expose BoW vocabulary path as a ros parameter
     config_.vocabulary_path = pkg_path + "/../support_files/brief_k10L6.bin";
     config_.brief_pattern_file_path =
         pkg_path + "/../support_files/brief_pattern.yml";
@@ -77,50 +74,44 @@ bool PoseGraphNode::InitializeNode() {
     camera_ = camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
         config_file_path_.c_str());
     image_topic_ = std::string(fs["image_topic"]);
-    config_.saved_pose_graph_dir = std::string(fs["pose_graph_save_path"]); // Need to cast?
+    config_.saved_pose_graph_dir = std::string(fs["pose_graph_save_path"]);
     config_.save_debug_image = (int)fs["save_image"];
 
     vins_result_path_ = std::string(fs["output_path"]);
     FileSystemHelper::createDirectoryIfNotExists(
         config_.saved_pose_graph_dir.c_str());
     FileSystemHelper::createDirectoryIfNotExists(vins_result_path_.c_str());
+    vins_result_path_ = vins_result_path_ + "/vins_result_loop.csv";
 
-    visualise_imu_forward_ = (int)fs["visualise_imu_forward"]; //Why not cast as bool
-    load_previous_pose_graph = (int)fs["load_previous_pose_graph"];  //Why not cast as bool
-    config_.fast_relocalization = (int)fs["fast_relocalization"]; //Why not cast as bool
-    vins_result_path_ = vins_result_path_ + "/vins_result_loop.csv"; //Define this up above somewhere. All the magic strings / number define above. Then when we want to make a ros param easy to find
+    visualise_imu_forward_ = (int)fs["visualise_imu_forward"];
+    load_previous_pose_graph = (int)fs["load_previous_pose_graph"];
+    config_.fast_relocalization = (int)fs["fast_relocalization"];
 
     std::ofstream fout(vins_result_path_, std::ios::out);
-    
-        if (load_previous_pose_graph) {
+
+    if (load_previous_pose_graph) {
       ROS_INFO("Loading previous pose graph");
       std::lock_guard<std::mutex> lock(process_mutex_);
-      LoadPoseGraph();
+      pose_graph_.Load();
     } else {
       ROS_INFO("Not loading any previous pose graph");
     }
   }
-  
+
   fs.release();
 
-  if (loop_closure_) {
-
-  }
-
-
-
   StartPublishersAndSubscribers();
-  
-  Initialize(config_, camera_);
 
-  StartBackgroundThreads(); //Rename
+  pose_graph_.Initialize(config_, camera_);
+  pose_graph_.RegisterEventObserver(PoseGraphEventObserver::shared_from_this());
+
+  StartCommandAndProcessingThreads();
   return true;
 }
 
 bool PoseGraphNode::ReadParameters() {
-  nh_.param<std::string>("config_file", config_file_path_,
-                         "/config/config.yaml"); // Where is this file? 
-  nh_.param<int>("visualization_shift_x", visualization_shift_x_, 0); // Did you expose this? 
+  nh_.param<std::string>("config_file", config_file_path_);
+  nh_.param<int>("visualization_shift_x", visualization_shift_x_, 0);
   nh_.param<int>("visualization_shift_y", visualization_shift_y_, 0);
   nh_.param<int>("skip_cnt", skip_cnt_threshold_, 0);
   nh_.param<double>("skip_dis", skip_distance_, 0.0);
@@ -155,7 +146,7 @@ void PoseGraphNode::StartPublishersAndSubscribers() {
       "/vins_estimator/relo_relative_pose", 2000,
       &PoseGraphNode::ReloRelativePoseCallback, this);
 
-  pub_match_img_ = nh_.advertise<sensor_msgs::Image>("match_image", 1000);
+  pub_match_img_ = nh_.advertise<sensor_msgs::Image>("match_image", 2000);
   pub_camera_pose_visual_ = nh_.advertise<visualization_msgs::MarkerArray>(
       "camera_pose_visual", 1000);
   pub_key_odometrys_ =
@@ -171,7 +162,7 @@ void PoseGraphNode::StartPublishersAndSubscribers() {
     pub_path_[i] = nh_.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
 }
 
-void PoseGraphNode::StartBackgroundThreads() {
+void PoseGraphNode::StartCommandAndProcessingThreads() {
   measurement_thread_ = std::thread(std::bind(&PoseGraphNode::Process, this));
   keyboard_command_thread_ =
       std::thread(std::bind(&PoseGraphNode::Command, this));
@@ -294,13 +285,13 @@ void PoseGraphNode::Process() {
         std::shared_ptr<KeyFrame> keyframe = std::make_shared<KeyFrame>(
             pose_msg->header.stamp.toSec(), frame_index_, T, R, image, point_3d,
             point_2d_uv, point_2d_normal, point_id, sequence_index_,
-            config_.image_rows, config_.image_cols,
+            config_.image_height, config_.image_width,
             config_.brief_pattern_file_path, config_.save_debug_image, camera_);
         {
           std::lock_guard<std::mutex> lock(process_mutex_);
-          AddKeyFrameService(keyframe);
+          pose_graph_.AddKeyFrame(keyframe);
           {
-            int sequence_cnt = GetCurrentSequenceCount();
+            int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
             auto kf_attribute = keyframe->getAttributes();
             Eigen::Quaterniond quarternion{kf_attribute.rotation};
             geometry_msgs::PoseStamped pose_stamped;
@@ -351,7 +342,7 @@ void PoseGraphNode::Command() {
     if (c == 's') {
       {
         std::lock_guard<std::mutex> lock(process_mutex_);
-        Save();
+        pose_graph_.Save();
       }
       // printf(
       //     "save pose graph finish\nyou can set 'load_previous_pose_graph' to
@@ -369,7 +360,7 @@ void PoseGraphNode::Command() {
 }
 
 void PoseGraphNode::Publish() {
-  int sequence_cnt = GetCurrentSequenceCount();
+  int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
   for (int i = 1; i <= sequence_cnt; i++) {
     pub_pg_path_.publish(path_[i]);
     pub_path_[i].publish(path_[i]);
@@ -438,7 +429,7 @@ void PoseGraphNode::OnKeyFrameConnectionFound(
     KeyFrame::Attributes old_kf_attribute,
     std::vector<cv::Point2f> matched_2d_old_norm,
     std::vector<double> matched_id, cv::Mat& thumb_image) {
-  ROS_INFO("On Keyframe connection found");
+  ROS_DEBUG("On Keyframe connection found");
   {
     sensor_msgs::ImagePtr msg =
         cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumb_image)
@@ -475,9 +466,9 @@ void PoseGraphNode::OnKeyFrameConnectionFound(
 
 void PoseGraphNode::OnPoseGraphOptimization(
     std::vector<KeyFrame::Attributes> kf_attributes) {
-  ROS_INFO("On Pose graph optimization");
+  // ROS_INFO("On Pose graph optimization");
   std::vector<KeyFrame::Attributes>::iterator it;
-  int sequence_cnt = GetCurrentSequenceCount();
+  int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
   for (int i = 1; i <= sequence_cnt; i++) {
     path_[i].poses.clear();
   }
@@ -588,12 +579,12 @@ void PoseGraphNode::ImuForwardCallback(
   vio_q.y() = forward_msg->pose.pose.orientation.y;
   vio_q.z() = forward_msg->pose.pose.orientation.z;
 
-  auto pose_graph_world_vio = GetWorldVio();
+  auto pose_graph_world_vio = pose_graph_.GetWorldVio();
   vio_t =
       pose_graph_world_vio.rotation * vio_t + pose_graph_world_vio.translation;
   vio_q = pose_graph_world_vio.rotation * vio_q;
 
-  auto pose_graph_drift = GetDrift();
+  auto pose_graph_drift = pose_graph_.GetDrift();
   vio_t = pose_graph_drift.rotation * vio_t + pose_graph_drift.translation;
   vio_q = pose_graph_drift.rotation * vio_q;
 
@@ -617,12 +608,12 @@ void PoseGraphNode::VioCallback(const nav_msgs::OdometryConstPtr& pose_msg) {
   vio_q.y() = pose_msg->pose.pose.orientation.y;
   vio_q.z() = pose_msg->pose.pose.orientation.z;
 
-  auto pose_graph_world_vio = GetWorldVio();
+  auto pose_graph_world_vio = pose_graph_.GetWorldVio();
   vio_t =
       pose_graph_world_vio.rotation * vio_t + pose_graph_world_vio.translation;
   vio_q = pose_graph_world_vio.rotation * vio_q;
 
-  auto pose_graph_drift = Drift();
+  auto pose_graph_drift = pose_graph_.GetDrift();
   vio_t = pose_graph_drift.rotation * vio_t + pose_graph_drift.translation;
   vio_q = pose_graph_drift.rotation * vio_q;
 
@@ -738,7 +729,7 @@ void PoseGraphNode::ExtrinsicCallback(
                                           pose_msg->pose.pose.orientation.y,
                                           pose_msg->pose.pose.orientation.z)
                                   .toRotationMatrix();
-  UpdateImuCameraPose(imu_camera_pose_);
+  pose_graph_.UpdateImuCameraPose(imu_camera_pose_);
 }
 
 void PoseGraphNode::PointCallback(
@@ -776,14 +767,19 @@ void PoseGraphNode::ReloRelativePoseCallback(
   Eigen::Matrix<double, 8, 1> loop_info;
   loop_info << relative_t.x(), relative_t.y(), relative_t.z(), relative_q.w(),
       relative_q.x(), relative_q.y(), relative_q.z(), relative_yaw;
-  UpdateKeyFrameLoop(index, loop_info);
+  pose_graph_.UpdateKeyFrameLoop(index, loop_info);
 }
 }  // namespace pose_graph
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "pose_graph_node");
-
-  pose_graph::PoseGraphNode pose_graph_node;
+  std::shared_ptr<pose_graph::PoseGraphNode> pose_graph_node =
+      std::make_shared<pose_graph::PoseGraphNode>();
+  if (!pose_graph_node->Start()) {
+    ROS_ERROR("Failed to start PoseGraphNode");
+    ros::shutdown();
+  }
+  ROS_INFO("PoseGraphNode started.");
   ros::spin();
   return 0;
 }

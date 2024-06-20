@@ -6,8 +6,8 @@
  * @copyright Copyright (c) 2024 Cheo Kee Jin.
  */
 
-#ifndef DETAILS_POSE_GRAPH_HPP
-#define DETAILS_POSE_GRAPH_HPP
+#ifndef POSE_GRAPH_POSE_GRAPH_HPP
+#define POSE_GRAPH_POSE_GRAPH_HPP
 
 #include <atomic>
 #include <list>
@@ -24,6 +24,7 @@
 
 #include "DBoW/DBoW2.h"
 #include "pose_graph/details/keyframe.h"
+#include "pose_graph/details/pose_graph_event_observer.hpp"
 
 namespace pose_graph {
 struct PoseGraphConfig {
@@ -33,8 +34,8 @@ struct PoseGraphConfig {
   std::string brief_pattern_file_path = "";
   bool save_debug_image = false;
   bool fast_relocalization = false;
-  int image_rows;
-  int image_cols;
+  int image_height;
+  int image_width;
 };
 
 class PoseGraph {
@@ -50,45 +51,48 @@ class PoseGraph {
   };
 
  public:
-  PoseGraph();
   ~PoseGraph();
+
   void Initialize(const PoseGraphConfig& config, camodocal::CameraPtr camera);
-  bool LoadPoseGraph();
-  bool LoadSingleConfigEntry(FILE* pFile,
-                             KeyFrame::Attributes& old_kf_attribute,
-                             KeyFrame::Attributes& current_kf_attribute,
-                             std::vector<cv::Point2f>& matched_2d_old_norm,
-                             std::vector<double>& matched_id,
-                             cv::Mat& current_kf_thumb_image);
-  void SavePoseGraph();
+  void RegisterEventObserver(
+      std::shared_ptr<PoseGraphEventObserver> event_observer);
+  bool Load();
   void Save();
-  void AddKeyFrameService(std::shared_ptr<KeyFrame> current_keyframe);
-  void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
-                   KeyFrame* old_keyframe,
-                   std::vector<cv::Point2f>& matched_2d_old_norm,
-                   std::vector<double>& matched_id);
-  void Optimize4DoF();
+  void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe);
   void UpdateKeyFrameLoop(int index,
                           const Eigen::Matrix<double, 8, 1>& loop_info);
   void UpdateImuCameraPose(const Pose& imu_camera_pose);
   int GetCurrentSequenceCount() const;
   Drift GetDrift() const;
   Pose GetWorldVio() const;
-  KeyFrame::Attributes GetKeyFrameAttribute(int index) const;
-  std::vector<KeyFrame::Attributes> GetKeyFrameAttributes() const;
 
  private:
+  KeyFrame::Attributes GetKeyFrameAttribute(int index) const;
+  std::vector<KeyFrame::Attributes> GetKeyFrameAttributes() const;
+  int DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe);
+  std::shared_ptr<KeyFrame> GetKeyFrame(int index);
+  void LoadVocabulary();
+  void AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
+                   int& old_keyframe_loop_index,
+                   std::vector<cv::Point2f>& matched_2d_old_norm,
+                   std::vector<double>& matched_id);
+  void AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe);
   void LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
                     KeyFrame* old_keyframe,
                     std::vector<cv::Point2f>& matched_2d_old_norm,
                     std::vector<double>& matched_id);
-  int DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe);
-  std::shared_ptr<KeyFrame> GetKeyFrame(int index);
-  void LoadVocabulary();
-  void AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe);
+  bool LoadSingleConfigEntry(FILE* pFile,
+                             KeyFrame::Attributes& old_kf_attribute,
+                             KeyFrame::Attributes& current_kf_attribute,
+                             std::vector<cv::Point2f>& matched_2d_old_norm,
+                             std::vector<double>& matched_id,
+                             cv::Mat& current_kf_thumb_image);
   Pose GetImuCameraPose() const;
+  void Optimize4DoF();
+  void StartOptimizationThread();
 
  private:
+  std::shared_ptr<PoseGraphEventObserver> event_observer_;
   PoseGraphConfig config_;
   camodocal::CameraPtr camera_;  // Note: internally it uses a shared pointer.
   Drift drift_;
@@ -114,23 +118,7 @@ class PoseGraph {
   std::unique_ptr<BriefVocabulary> vocabulary_;
   std::atomic<bool> keep_running_{true};
   std::thread optimization_thread_;
- private:
-  void StartOptimizationThread();
-  virtual void OnPoseGraphLoaded() = 0;
-  virtual void OnPoseGraphSaved() = 0;
-  virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) = 0;
-  virtual void OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
-                                int count) = 0;
-  virtual void OnKeyFrameConnectionFound(
-      KeyFrame::Attributes current_kf_attribute,
-      KeyFrame::Attributes old_kf_attribute,
-      std::vector<cv::Point2f> matched_2d_old_norm,
-      std::vector<double> matched_id, cv::Mat& thumb_image) = 0;
-  virtual void OnPoseGraphOptimization(
-      std::vector<KeyFrame::Attributes> kf_attributes) = 0;
-  virtual void OnNewSequentialEdge(Vector3d p1, Vector3d p2) = 0;
-  virtual void OnNewLoopEdge(Vector3d p1, Vector3d p2) = 0;
 };
 }  // namespace pose_graph
 
-#endif /* DETAILS_POSE_GRAPH_HPP */
+#endif /* POSE_GRAPH_POSE_GRAPH_HPP */
