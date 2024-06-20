@@ -7,7 +7,6 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <opencv2/opencv.hpp>
-#include "pose_graph/parameters.h"
 
 class CameraPoseVisualization {
 public:

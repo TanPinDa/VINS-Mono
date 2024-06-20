@@ -3,7 +3,7 @@
 */
 
 #include <iostream>
-#include "pose_graph/pose_graph.h"
+#include "pose_graph/pose_graph_service.hpp"
 
 
 int main()
