@@ -330,12 +330,10 @@ int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe)
     cv::Mat loop_result;
     loop_result = compressed_image.clone();
     if (ret.size() > 0)
-    {
       putText(loop_result, "neighbour score:" + to_string(ret[0].Score),
               cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
               cv::Scalar(255));
-    }
-
+    
     for (unsigned int i = 0; i < ret.size(); i++)
     {
       int tmp_index = ret[i].Id;
@@ -374,9 +372,7 @@ int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe)
     return min_index;
   }
   else
-  {
     return -1;
-  }
 }
 
 void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe)
