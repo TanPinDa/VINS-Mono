@@ -18,6 +18,9 @@
 
 namespace pose_graph
 {
+  PoseGraph::PoseGraph()
+  {
+  }
 
   void PoseGraph::Initialize(const PoseGraphConfig &config,
                              camodocal::CameraPtr camera)
