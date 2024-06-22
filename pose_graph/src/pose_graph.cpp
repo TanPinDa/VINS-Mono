@@ -433,10 +433,10 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
           throw std::runtime_error("Optimize4DoF(): current keyframe not found");
         }
 
-        ceres::LossFunction *loss_function;
-        loss_function = new ceres::HuberLoss(0.1);
-        // loss_function = new ceres::CauchyLoss(1.0);
-        ceres::Manifold *angle_manifold =
+      ceres::LossFunction *loss_function;
+      loss_function = new ceres::HuberLoss(0.1);
+      // loss_function = new ceres::CauchyLoss(1.0);
+      ceres::Manifold *angle_manifold =
             new ceres::AutoDiffManifold<AngleManifoldFunctor, 1, 1>;
 
         for (it = keyframes_.begin(); it != keyframes_.end(); it++)
