@@ -381,7 +381,7 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
   }
 
   void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe)
-  {
+{
     // add image into image_pool for visualization
     if (config_.save_debug_image)
     {
@@ -395,7 +395,7 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
     }
 
     db_.add(keyframe->brief_descriptors);
-  }
+}
 
   void PoseGraph::Optimize4DoF()
   {
@@ -412,8 +412,7 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
     }
     if (current_index != -1)
     {
-      // printf("optimize pose graph \n");
-      ceres::Problem problem;
+      printf("optimize pose graph \n");
       int i = 0;
       list<std::shared_ptr<KeyFrame>>::iterator it;
       int max_length = current_index + 1;
@@ -423,6 +422,8 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
       Quaterniond quarternion_array[max_length];
       double euler_array[max_length][3];
       double sequence_array[max_length];
+
+      ceres::Problem problem;
       std::shared_ptr<KeyFrame> current_keyframe;
 
       {
@@ -437,9 +438,9 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
       loss_function = new ceres::HuberLoss(0.1);
       // loss_function = new ceres::CauchyLoss(1.0);
       ceres::Manifold *angle_manifold =
-            new ceres::AutoDiffManifold<AngleManifoldFunctor, 1, 1>;
+          new ceres::AutoDiffManifold<AngleManifoldFunctor, 1, 1>;
 
-        for (it = keyframes_.begin(); it != keyframes_.end(); it++)
+      for (it = keyframes_.begin(); it != keyframes_.end(); it++)
       {
           if ((*it)->index < first_looped_index)
             continue;
@@ -470,51 +471,51 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
             problem.SetParameterBlockConstant(translation_array[i]);
           }
 
-          // add edge
-          for (int j = 1; j < 5; j++)
+        // add edge
+        for (int j = 1; j < 5; j++)
+        {
+          if (i - j >= 0 && sequence_array[i] == sequence_array[i - j])
           {
-            if (i - j >= 0 && sequence_array[i] == sequence_array[i - j])
-            {
-              Vector3d euler_conncected =
+            Vector3d euler_conncected =
                   Utility::R2ypr(quarternion_array[i - j].toRotationMatrix());
-              Vector3d relative_t(
+            Vector3d relative_t(
                   translation_array[i][0] - translation_array[i - j][0],
                   translation_array[i][1] - translation_array[i - j][1],
                   translation_array[i][2] - translation_array[i - j][2]);
               relative_t = quarternion_array[i - j].inverse() * relative_t;
               double relative_yaw = euler_array[i][0] - euler_array[i - j][0];
-              ceres::CostFunction *cost_function = FourDOFError::Create(
+            ceres::CostFunction *cost_function = FourDOFError::Create(
                   relative_t.x(), relative_t.y(), relative_t.z(), relative_yaw,
                   euler_conncected.y(), euler_conncected.z());
               problem.AddResidualBlock(cost_function, NULL, euler_array[i - j],
                                        translation_array[i - j], euler_array[i],
                                        translation_array[i]);
-            }
           }
+        }
 
           // add loop edge
 
-          if ((*it)->has_loop)
-          {
-            assert((*it)->loop_index >= first_looped_index);
-            int connected_index = GetKeyFrame((*it)->loop_index)->local_index;
-            Vector3d euler_conncected = Utility::R2ypr(
-                quarternion_array[connected_index].toRotationMatrix());
-            Vector3d relative_t;
-            relative_t = (*it)->getLoopRelativeT();
-            double relative_yaw = (*it)->getLoopRelativeYaw();
-            ceres::CostFunction *cost_function = FourDOFWeightError::Create(
-                relative_t.x(), relative_t.y(), relative_t.z(), relative_yaw,
-                euler_conncected.y(), euler_conncected.z());
-            problem.AddResidualBlock(cost_function, loss_function,
-                                     euler_array[connected_index],
-                                     translation_array[connected_index],
-                                     euler_array[i], translation_array[i]);
-          }
+        if ((*it)->has_loop)
+        {
+          assert((*it)->loop_index >= first_looped_index);
+          int connected_index = GetKeyFrame((*it)->loop_index)->local_index;
+          Vector3d euler_conncected = Utility::R2ypr(
+              quarternion_array[connected_index].toRotationMatrix());
+          Vector3d relative_t;
+          relative_t = (*it)->getLoopRelativeT();
+          double relative_yaw = (*it)->getLoopRelativeYaw();
+          ceres::CostFunction *cost_function = FourDOFWeightError::Create(
+              relative_t.x(), relative_t.y(), relative_t.z(), relative_yaw,
+              euler_conncected.y(), euler_conncected.z());
+          problem.AddResidualBlock(cost_function, loss_function,
+                                    euler_array[connected_index],
+                                    translation_array[connected_index],
+                                    euler_array[i], translation_array[i]);
+        }
 
-          if ((*it)->index == current_index)
-            break;
-          i++;
+        if ((*it)->index == current_index)
+          break;
+        i++;
         }
       }
 
