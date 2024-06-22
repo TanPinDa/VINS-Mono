@@ -9,7 +9,7 @@
 
 #include <iostream>
 #include <fstream>
-#include "QueryResults.h"
+#include "DBoW/QueryResults.h"
 
 using namespace std;
 
