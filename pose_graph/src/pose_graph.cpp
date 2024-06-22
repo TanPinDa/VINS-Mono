@@ -53,129 +53,129 @@ void PoseGraph::LoadVocabulary()
   db_.setVocabulary(*vocabulary_);
 }
 
-  void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
-                              int &old_keyframe_loop_index,
-                              std::vector<cv::Point2f> &matched_2d_old_norm,
-                              std::vector<double> &matched_id)
+void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
+                            int &old_keyframe_loop_index,
+                            std::vector<cv::Point2f> &matched_2d_old_norm,
+                            std::vector<double> &matched_id)
+{
+  // shift to base frame
+  Vector3d vio_current_position;
+  Matrix3d vio_current_rotation;
+  if (current_sequence_count_ != current_keyframe->sequence)
   {
-    // shift to base frame
-    Vector3d vio_current_position;
-    Matrix3d vio_current_rotation;
-    if (current_sequence_count_ != current_keyframe->sequence)
+    current_sequence_count_++;
+    sequence_loop_flags_.push_back(false);
+    world_vio_.translation = Eigen::Vector3d(0, 0, 0);
+    world_vio_.rotation = Eigen::Matrix3d::Identity();
     {
-      current_sequence_count_++;
-      sequence_loop_flags_.push_back(false);
-      world_vio_.translation = Eigen::Vector3d(0, 0, 0);
-      world_vio_.rotation = Eigen::Matrix3d::Identity();
-      {
-        std::lock_guard<std::mutex> lock(drift_mutex_);
-        drift_.translation = Eigen::Vector3d(0, 0, 0);
-        drift_.rotation = Eigen::Matrix3d::Identity();
-      }
-    }
-
-    current_keyframe->getVioPose(vio_current_position, vio_current_rotation);
-    vio_current_position =
-        world_vio_.rotation * vio_current_position + world_vio_.translation;
-    vio_current_rotation = world_vio_.rotation * vio_current_rotation;
-    current_keyframe->updateVioPose(vio_current_position, vio_current_rotation);
-    // Assign the current global_keyframe_index_counter_, then increment it
-    current_keyframe->index = global_keyframe_index_counter_++;
-    old_keyframe_loop_index = -1;
-    if (config_.detect_loop_closure)
-    {
-      old_keyframe_loop_index = DetectLoopClosure(current_keyframe);
-    }
-    else
-    {
-      AddKeyFrameIntoVoc(current_keyframe);
-    }
-
-    KeyFrame *old_keyframe = nullptr;
-    if (old_keyframe_loop_index != -1)
-    {
-      old_keyframe = GetKeyFrame(old_keyframe_loop_index).get();
-      if (old_keyframe == nullptr)
-      {
-        throw std::runtime_error("AddKeyFrame(): loop index not found");
-      }
-
-      if (current_keyframe->findConnection(
-              old_keyframe, matched_2d_old_norm, matched_id,
-              imu_camera_pose_.translation, imu_camera_pose_.rotation))
-      {
-        if (earliest_loop_index > old_keyframe_loop_index || earliest_loop_index == -1)
-        {
-          earliest_loop_index = old_keyframe_loop_index;
-        }
-
-        Vector3d old_world_position, current_world_position, current_vio_position;
-        Matrix3d old_world_rotation, current_world_rotation, current_vio_rotation;
-        old_keyframe->getVioPose(old_world_position, old_world_rotation);
-        current_keyframe->getVioPose(current_vio_position, current_vio_rotation);
-
-        Vector3d relative_translation;
-        Quaterniond relative_quarternion;
-        relative_translation = current_keyframe->getLoopRelativeT();
-        relative_quarternion =
-            (current_keyframe->getLoopRelativeQ()).toRotationMatrix();
-        current_world_position =
-            old_world_rotation * relative_translation + old_world_position;
-        current_world_rotation = old_world_rotation * relative_quarternion;
-        double shift_yaw;
-        Matrix3d shift_rotation;
-        Vector3d shift_translation;
-        shift_yaw = Utility::R2ypr(current_world_rotation).x() -
-                    Utility::R2ypr(current_vio_rotation).x();
-        shift_rotation = Utility::ypr2R(Vector3d(shift_yaw, 0, 0));
-        shift_translation =
-            current_world_position - current_world_rotation *
-                                         current_vio_rotation.transpose() *
-                                         current_vio_position;
-        // shift vio pose of whole sequence to the world frame
-        if (old_keyframe->sequence != current_keyframe->sequence &&
-            sequence_loop_flags_[current_keyframe->sequence] == 0)
-        {
-          world_vio_.rotation = shift_rotation;
-          world_vio_.translation = shift_translation;
-          current_vio_position =
-              world_vio_.rotation * current_vio_position + world_vio_.translation;
-          current_vio_rotation = world_vio_.rotation * current_vio_rotation;
-          current_keyframe->updateVioPose(current_vio_position,
-                                          current_vio_rotation);
-          for (auto keyframe : keyframes_)
-          {
-            if (keyframe->sequence == current_keyframe->sequence)
-            {
-              Vector3d current_vio_position;
-              Matrix3d current_vio_rotation;
-              keyframe->getVioPose(current_vio_position, current_vio_rotation);
-              current_vio_position = world_vio_.rotation * current_vio_position +
-                                     world_vio_.translation;
-              current_vio_rotation = world_vio_.rotation * current_vio_rotation;
-              keyframe->updateVioPose(current_vio_position, current_vio_rotation);
-            }
-          }
-          sequence_loop_flags_[current_keyframe->sequence] = 1;
-        }
-        {
-          std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
-          optimize_buf_.push(current_keyframe->index);
-        }
-      }
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(keyframes_mutex_);
-      Eigen::Vector3d position;
-      Eigen::Matrix3d rotation;
-      current_keyframe->getVioPose(position, rotation);
-      position = drift_.rotation * position + drift_.translation;
-      rotation = drift_.rotation * rotation;
-      current_keyframe->updatePose(position, rotation);
-      keyframes_.push_back(current_keyframe);
+      std::lock_guard<std::mutex> lock(drift_mutex_);
+      drift_.translation = Eigen::Vector3d(0, 0, 0);
+      drift_.rotation = Eigen::Matrix3d::Identity();
     }
   }
+
+  current_keyframe->getVioPose(vio_current_position, vio_current_rotation);
+  vio_current_position =
+      world_vio_.rotation * vio_current_position + world_vio_.translation;
+  vio_current_rotation = world_vio_.rotation * vio_current_rotation;
+  current_keyframe->updateVioPose(vio_current_position, vio_current_rotation);
+  // Assign the current global_keyframe_index_counter_, then increment it
+  current_keyframe->index = global_keyframe_index_counter_++;
+  old_keyframe_loop_index = -1;
+  if (config_.detect_loop_closure)
+  {
+    old_keyframe_loop_index = DetectLoopClosure(current_keyframe);
+  }
+  else
+  {
+    AddKeyFrameIntoVoc(current_keyframe);
+  }
+
+  KeyFrame *old_keyframe = nullptr;
+  if (old_keyframe_loop_index != -1)
+  {
+    old_keyframe = GetKeyFrame(old_keyframe_loop_index).get();
+    if (old_keyframe == nullptr)
+    {
+      throw std::runtime_error("AddKeyFrame(): loop index not found");
+    }
+
+    if (current_keyframe->findConnection(
+            old_keyframe, matched_2d_old_norm, matched_id,
+            imu_camera_pose_.translation, imu_camera_pose_.rotation))
+    {
+      if (earliest_loop_index > old_keyframe_loop_index || earliest_loop_index == -1)
+      {
+        earliest_loop_index = old_keyframe_loop_index;
+      }
+
+      Vector3d old_world_position, current_world_position, current_vio_position;
+      Matrix3d old_world_rotation, current_world_rotation, current_vio_rotation;
+      old_keyframe->getVioPose(old_world_position, old_world_rotation);
+      current_keyframe->getVioPose(current_vio_position, current_vio_rotation);
+
+      Vector3d relative_translation;
+      Quaterniond relative_quarternion;
+      relative_translation = current_keyframe->getLoopRelativeT();
+      relative_quarternion =
+          (current_keyframe->getLoopRelativeQ()).toRotationMatrix();
+      current_world_position =
+          old_world_rotation * relative_translation + old_world_position;
+      current_world_rotation = old_world_rotation * relative_quarternion;
+      double shift_yaw;
+      Matrix3d shift_rotation;
+      Vector3d shift_translation;
+      shift_yaw = Utility::R2ypr(current_world_rotation).x() -
+                  Utility::R2ypr(current_vio_rotation).x();
+      shift_rotation = Utility::ypr2R(Vector3d(shift_yaw, 0, 0));
+      shift_translation =
+          current_world_position - current_world_rotation *
+                                        current_vio_rotation.transpose() *
+                                        current_vio_position;
+      // shift vio pose of whole sequence to the world frame
+      if (old_keyframe->sequence != current_keyframe->sequence &&
+          sequence_loop_flags_[current_keyframe->sequence] == 0)
+      {
+        world_vio_.rotation = shift_rotation;
+        world_vio_.translation = shift_translation;
+        current_vio_position =
+            world_vio_.rotation * current_vio_position + world_vio_.translation;
+        current_vio_rotation = world_vio_.rotation * current_vio_rotation;
+        current_keyframe->updateVioPose(current_vio_position,
+                                        current_vio_rotation);
+        for (auto keyframe : keyframes_)
+        {
+          if (keyframe->sequence == current_keyframe->sequence)
+          {
+            Vector3d current_vio_position;
+            Matrix3d current_vio_rotation;
+            keyframe->getVioPose(current_vio_position, current_vio_rotation);
+            current_vio_position = world_vio_.rotation * current_vio_position +
+                                    world_vio_.translation;
+            current_vio_rotation = world_vio_.rotation * current_vio_rotation;
+            keyframe->updateVioPose(current_vio_position, current_vio_rotation);
+          }
+        }
+        sequence_loop_flags_[current_keyframe->sequence] = 1;
+      }
+      {
+        std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
+        optimize_buf_.push(current_keyframe->index);
+      }
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(keyframes_mutex_);
+    Eigen::Vector3d position;
+    Eigen::Matrix3d rotation;
+    current_keyframe->getVioPose(position, rotation);
+    position = drift_.rotation * position + drift_.translation;
+    rotation = drift_.rotation * rotation;
+    current_keyframe->updatePose(position, rotation);
+    keyframes_.push_back(current_keyframe);
+  }
+}
  void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe)
   {
     int old_keyframe_loop_index = -1;
@@ -238,53 +238,53 @@ void PoseGraph::LoadVocabulary()
     event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes());
 }
 
-  void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
-                               KeyFrame *old_keyframe,
-                               std::vector<cv::Point2f> &matched_2d_old_norm,
-                               std::vector<double> &matched_id)
+void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
+                              KeyFrame *old_keyframe,
+                              std::vector<cv::Point2f> &matched_2d_old_norm,
+                              std::vector<double> &matched_id)
+{
+  // Assign the current global_keyframe_index_counter_, then increment it
+  current_keyframe->index = global_keyframe_index_counter_++;
+  int loop_index = -1;
+  if (config_.detect_loop_closure)
   {
-    // Assign the current global_keyframe_index_counter_, then increment it
-    current_keyframe->index = global_keyframe_index_counter_++;
-    int loop_index = -1;
-    if (config_.detect_loop_closure)
-    {
-      loop_index = DetectLoopClosure(current_keyframe);
-    }
-    else
-    {
-      AddKeyFrameIntoVoc(current_keyframe);
-    }
+    loop_index = DetectLoopClosure(current_keyframe);
+  }
+  else
+  {
+    AddKeyFrameIntoVoc(current_keyframe);
+  }
 
-    if (loop_index != -1)
+  if (loop_index != -1)
+  {
+    printf(" %d detected loop closure with %d \n", current_keyframe->index,
+            loop_index);
+    old_keyframe = GetKeyFrame(loop_index).get();
+    if (old_keyframe == nullptr)
     {
-      printf(" %d detected loop closure with %d \n", current_keyframe->index,
-             loop_index);
-      old_keyframe = GetKeyFrame(loop_index).get();
-      if (old_keyframe == nullptr)
+      throw std::runtime_error("LoadKeyFrame(): loop index not found");
+    }
+    std::vector<cv::Point2f> matched_2d_old_norm;
+    std::vector<double> matched_id;
+    if (current_keyframe->findConnection(
+            old_keyframe, matched_2d_old_norm, matched_id,
+            imu_camera_pose_.translation, imu_camera_pose_.rotation))
+    {
+      if (earliest_loop_index > loop_index || earliest_loop_index == -1)
       {
-        throw std::runtime_error("LoadKeyFrame(): loop index not found");
+        earliest_loop_index = loop_index;
       }
-      std::vector<cv::Point2f> matched_2d_old_norm;
-      std::vector<double> matched_id;
-      if (current_keyframe->findConnection(
-              old_keyframe, matched_2d_old_norm, matched_id,
-              imu_camera_pose_.translation, imu_camera_pose_.rotation))
       {
-        if (earliest_loop_index > loop_index || earliest_loop_index == -1)
-        {
-          earliest_loop_index = loop_index;
-        }
-        {
-          std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
-          optimize_buf_.push(current_keyframe->index);
-        }
+        std::lock_guard<std::mutex> lock(optimize_buf_mutex_);
+        optimize_buf_.push(current_keyframe->index);
       }
     }
+  }
 
-    {
-      std::lock_guard<std::mutex> lock(keyframes_mutex_);
-      keyframes_.push_back(current_keyframe);
-    }
+  {
+    std::lock_guard<std::mutex> lock(keyframes_mutex_);
+    keyframes_.push_back(current_keyframe);
+  }
 }
 
 std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
@@ -298,87 +298,86 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
                             return kf->index == index;
                           });
 
-    if (it != keyframes_.end())
-      return *it;
-    else
-      return nullptr;
+  if (it != keyframes_.end())
+    return *it;
+  else
+    return nullptr;
 }
 
-  int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe)
+int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe)
+{
+  // Add image to pool for visualization
+  cv::Mat compressed_image;
+  if (config_.save_debug_image)
   {
-    // Add image to pool for visualization
-    cv::Mat compressed_image;
-    if (config_.save_debug_image)
-    {
-      int feature_num = current_keyframe->keypoints.size();
-      cv::resize(current_keyframe->image, compressed_image, cv::Size(376, 240));
-      cv::putText(compressed_image, "Feature Num: " + std::to_string(feature_num),
-                  cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
-                  cv::Scalar(255));
-      image_pool_[current_keyframe->index] = compressed_image;
-  }
-
-    DBoW2::QueryResults ret;
-    db_.query(current_keyframe->brief_descriptors, ret, 4,
-              current_keyframe->index - 50);
-    db_.add(current_keyframe->brief_descriptors);
-
-    bool loop_detected = false;
-    if (config_.save_debug_image)
-    {
-      // NOTE: loop_result seems to be unused
-      cv::Mat loop_result;
-      loop_result = compressed_image.clone();
-      if (ret.size() > 0)
-      {
-        putText(loop_result, "neighbour score:" + to_string(ret[0].Score),
-                cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+    int feature_num = current_keyframe->keypoints.size();
+    cv::resize(current_keyframe->image, compressed_image, cv::Size(376, 240));
+    cv::putText(compressed_image, "Feature Num: " + std::to_string(feature_num),
+                cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
                 cv::Scalar(255));
-      }
+    image_pool_[current_keyframe->index] = compressed_image;
+  }
 
-      for (unsigned int i = 0; i < ret.size(); i++)
-      {
-        int tmp_index = ret[i].Id;
-        auto it = image_pool_.find(tmp_index);
-        cv::Mat tmp_image = (it->second).clone();
-        cv::putText(tmp_image,
-                    "index:  " + to_string(tmp_index) +
-                        "loop score:" + to_string(ret[i].Score),
-                    cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    cv::Scalar(255));
-        cv::hconcat(loop_result, tmp_image, loop_result);
-      }
+  DBoW2::QueryResults ret;
+  db_.query(current_keyframe->brief_descriptors, ret, 4,
+            current_keyframe->index - 50);
+  db_.add(current_keyframe->brief_descriptors);
+
+  bool loop_detected = false;
+  if (config_.save_debug_image)
+  {
+    // NOTE: loop_result seems to be unused
+    cv::Mat loop_result;
+    loop_result = compressed_image.clone();
+    if (ret.size() > 0)
+    {
+      putText(loop_result, "neighbour score:" + to_string(ret[0].Score),
+              cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+              cv::Scalar(255));
     }
 
-    // a good match with its nerghbour
-    if (ret.size() >= 1 && ret[0].Score > 0.05)
+    for (unsigned int i = 0; i < ret.size(); i++)
     {
-      for (unsigned int i = 1; i < ret.size(); i++)
-      {
-        // if (ret[i].Score > ret[0].Score * 0.3)
-        if (ret[i].Score > 0.015)
-        {
-          loop_detected = true;
-          int tmp_index = ret[i].Id;
-        }
-      }
-    }
-
-    if (loop_detected && current_keyframe->index > 50)
-    {
-      int min_index = -1;
-      for (unsigned int i = 0; i < ret.size(); i++)
-      {
-        if (min_index == -1 || (ret[i].Id < min_index && ret[i].Score > 0.015))
-          min_index = ret[i].Id;
-      }
-      return min_index;
-    }
-    else
-    {
-      return -1;
+      int tmp_index = ret[i].Id;
+      auto it = image_pool_.find(tmp_index);
+      cv::Mat tmp_image = (it->second).clone();
+      cv::putText(tmp_image,
+                  "index:  " + to_string(tmp_index) +
+                      "loop score:" + to_string(ret[i].Score),
+                  cv::Point2f(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                  cv::Scalar(255));
+      cv::hconcat(loop_result, tmp_image, loop_result);
     }
   }
+  // a good match with its nerghbour
+  if (ret.size() >= 1 && ret[0].Score > 0.05)
+  {
+    for (unsigned int i = 1; i < ret.size(); i++)
+    {
+      // if (ret[i].Score > ret[0].Score * 0.3)
+      if (ret[i].Score > 0.015)
+      {
+        loop_detected = true;
+        int tmp_index = ret[i].Id;
+      }
+    }
+  }
+
+  if (loop_detected && current_keyframe->index > 50)
+  {
+    int min_index = -1;
+    for (unsigned int i = 0; i < ret.size(); i++)
+    {
+      if (min_index == -1 || (ret[i].Id < min_index && ret[i].Score > 0.015))
+        min_index = ret[i].Id;
+    }
+    return min_index;
+  }
+  else
+  {
+    return -1;
+  }
+}
 
 void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe)
 {
