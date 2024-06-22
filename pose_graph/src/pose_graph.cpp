@@ -380,25 +380,25 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
     }
   }
 
-  void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe)
+void PoseGraph::AddKeyFrameIntoVoc(std::shared_ptr<KeyFrame> keyframe)
 {
     // add image into image_pool for visualization
-    if (config_.save_debug_image)
-    {
+  if (config_.save_debug_image)
+  {
       cv::Mat compressed_image;
-      int feature_num = keyframe->keypoints.size();
-      cv::resize(keyframe->image, compressed_image, cv::Size(376, 240));
-      putText(compressed_image, "feature_num:" + to_string(feature_num),
+    int feature_num = keyframe->keypoints.size();
+    cv::resize(keyframe->image, compressed_image, cv::Size(376, 240));
+    putText(compressed_image, "feature_num:" + to_string(feature_num),
               cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
               cv::Scalar(255));
-      image_pool_[keyframe->index] = compressed_image;
-    }
+    image_pool_[keyframe->index] = compressed_image;
+  }
 
-    db_.add(keyframe->brief_descriptors);
+  db_.add(keyframe->brief_descriptors);
 }
 
-  void PoseGraph::Optimize4DoF()
-  {
+void PoseGraph::Optimize4DoF()
+{
     int current_index = -1;
     int first_looped_index = -1;
     {
