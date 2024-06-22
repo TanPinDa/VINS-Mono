@@ -316,7 +316,7 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
                   cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4,
                   cv::Scalar(255));
       image_pool_[current_keyframe->index] = compressed_image;
-    }
+  }
 
     DBoW2::QueryResults ret;
     db_.query(current_keyframe->brief_descriptors, ret, 4,
