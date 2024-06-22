@@ -440,7 +440,7 @@ std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
             new ceres::AutoDiffManifold<AngleManifoldFunctor, 1, 1>;
 
         for (it = keyframes_.begin(); it != keyframes_.end(); it++)
-        {
+      {
           if ((*it)->index < first_looped_index)
             continue;
           (*it)->local_index = i;
