@@ -18,102 +18,40 @@
 
 namespace pose_graph
 {
-  PoseGraph::PoseGraph()
+PoseGraph::PoseGraph()
+{
+}
+
+void PoseGraph::Initialize(const PoseGraphConfig &config,
+                            camodocal::CameraPtr camera)
+{
+  config_ = config;
+  camera_ = camera;
+  LoadVocabulary();
+  StartOptimizationThread();
+}
+
+PoseGraph::~PoseGraph()
+{
+  keep_running_ = false;
+  if (optimization_thread_.joinable())
   {
+    optimization_thread_.join();
   }
+}
 
-  void PoseGraph::Initialize(const PoseGraphConfig &config,
-                             camodocal::CameraPtr camera)
-  {
-    config_ = config;
-    camera_ = camera;
-    LoadVocabulary();
-    StartOptimizationThread();
-  }
+void PoseGraph::RegisterEventObserver(
+    std::shared_ptr<PoseGraphEventObserver> event_observer)
+{
+  event_observer_ = event_observer;
+}
 
-  PoseGraph::~PoseGraph()
-  {
-    keep_running_ = false;
-    if (optimization_thread_.joinable())
-    {
-      optimization_thread_.join();
-    }
-  }
-
-  void PoseGraph::RegisterEventObserver(
-      std::shared_ptr<PoseGraphEventObserver> event_observer)
-  {
-    event_observer_ = event_observer;
-  }
-
-  void PoseGraph::LoadVocabulary()
-  {
-    // Load vocabulary from file
-    vocabulary_ = std::make_unique<BriefVocabulary>(config_.vocabulary_path);
-    db_.setVocabulary(*vocabulary_);
-  }
-
-  void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe)
-  {
-    int old_keyframe_loop_index = -1;
-    std::vector<cv::Point2f> matched_2d_old_norm;
-    std::vector<double> matched_id;
-    AddKeyFrame(current_keyframe, old_keyframe_loop_index, matched_2d_old_norm, matched_id);
-
-    if (!event_observer_)
-    {
-      // If no observer is registered, the rest of the function is not needed.
-      return;
-    }
-
-    if (old_keyframe_loop_index != -1)
-    {
-      cv::Mat image = current_keyframe->getThumbImage();
-      auto old_keyframe = GetKeyFrame(old_keyframe_loop_index);
-      event_observer_->OnKeyFrameConnectionFound(
-          current_keyframe->getAttributes(), old_keyframe->getAttributes(),
-          matched_2d_old_norm, matched_id, image);
-    }
-
-    // Show sequential edge
-    auto attributes = GetKeyFrameAttributes();
-    std::vector<KeyFrame::Attributes>::reverse_iterator rit = attributes.rbegin();
-    Vector3d P;
-    Matrix3d R;
-    current_keyframe->getPose(P, R);
-    for (int i = 0; i < 4; i++)
-    {
-      if (rit == attributes.rend())
-        break;
-      Vector3d connected_P;
-      Matrix3d connected_R;
-      if ((*rit).sequence == current_keyframe->sequence)
-      {
-        event_observer_->OnNewSequentialEdge(P, (*rit).position);
-      }
-      rit++;
-    }
-
-    // Show loop edge
-    if (current_keyframe->has_loop)
-    {
-      // printf("has loop \n");
-      KeyFrame::Attributes connected_kf_attributes =
-          GetKeyFrameAttribute(current_keyframe->loop_index);
-      Vector3d P0;
-      Matrix3d R0;
-      // current_keyframe->getVioPose(P0, R0);
-      current_keyframe->getPose(P0, R0);
-      if (current_keyframe->sequence > 0)
-      {
-        // printf("add loop into visual \n");
-        event_observer_->OnNewLoopEdge(P0, connected_kf_attributes.position);
-      }
-    }
-
-    // Generic callback
-    event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes());
-  }
+void PoseGraph::LoadVocabulary()
+{
+  // Load vocabulary from file
+  vocabulary_ = std::make_unique<BriefVocabulary>(config_.vocabulary_path);
+  db_.setVocabulary(*vocabulary_);
+}
 
   void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
                               int &old_keyframe_loop_index,
@@ -238,6 +176,67 @@ namespace pose_graph
       keyframes_.push_back(current_keyframe);
     }
   }
+ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe)
+  {
+    int old_keyframe_loop_index = -1;
+    std::vector<cv::Point2f> matched_2d_old_norm;
+    std::vector<double> matched_id;
+    AddKeyFrame(current_keyframe, old_keyframe_loop_index, matched_2d_old_norm, matched_id);
+
+    if (!event_observer_)
+    {
+      // If no observer is registered, the rest of the function is not needed.
+      return;
+    }
+
+    if (old_keyframe_loop_index != -1)
+    {
+      cv::Mat image = current_keyframe->getThumbImage();
+      auto old_keyframe = GetKeyFrame(old_keyframe_loop_index);
+      event_observer_->OnKeyFrameConnectionFound(
+          current_keyframe->getAttributes(), old_keyframe->getAttributes(),
+          matched_2d_old_norm, matched_id, image);
+    }
+
+    // Show sequential edge
+    auto attributes = GetKeyFrameAttributes();
+    std::vector<KeyFrame::Attributes>::reverse_iterator rit = attributes.rbegin();
+    Vector3d P;
+    Matrix3d R;
+    current_keyframe->getPose(P, R);
+    for (int i = 0; i < 4; i++)
+    {
+      if (rit == attributes.rend())
+        break;
+      Vector3d connected_P;
+      Matrix3d connected_R;
+      if ((*rit).sequence == current_keyframe->sequence)
+      {
+        event_observer_->OnNewSequentialEdge(P, (*rit).position);
+      }
+      rit++;
+    }
+
+    // Show loop edge
+    if (current_keyframe->has_loop)
+    {
+      // printf("has loop \n");
+      KeyFrame::Attributes connected_kf_attributes =
+          GetKeyFrameAttribute(current_keyframe->loop_index);
+      Vector3d P0;
+      Matrix3d R0;
+      // current_keyframe->getVioPose(P0, R0);
+      current_keyframe->getPose(P0, R0);
+      if (current_keyframe->sequence > 0)
+      {
+        // printf("add loop into visual \n");
+        event_observer_->OnNewLoopEdge(P0, connected_kf_attributes.position);
+      }
+    }
+
+    // Generic callback
+    event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes());
+}
 
   void PoseGraph::LoadKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
                                KeyFrame *old_keyframe,
@@ -286,24 +285,24 @@ namespace pose_graph
       std::lock_guard<std::mutex> lock(keyframes_mutex_);
       keyframes_.push_back(current_keyframe);
     }
-  }
+}
 
-  std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
-  {
-    // TODO for Kee Jin: Check if a mutex is needed here to access keyframes_
+std::shared_ptr<KeyFrame> PoseGraph::GetKeyFrame(int index)
+{
+  // TODO for Kee Jin: Check if a mutex is needed here to access keyframes_
 
-    // Get keyframe from the pose graph
-    auto it = std::find_if(keyframes_.begin(), keyframes_.end(),
-                           [index](const std::shared_ptr<KeyFrame> &kf)
-                           {
-                             return kf->index == index;
-                           });
+  // Get keyframe from the pose graph
+  auto it = std::find_if(keyframes_.begin(), keyframes_.end(),
+                          [index](const std::shared_ptr<KeyFrame> &kf)
+                          {
+                            return kf->index == index;
+                          });
 
     if (it != keyframes_.end())
       return *it;
     else
       return nullptr;
-  }
+}
 
   int PoseGraph::DetectLoopClosure(std::shared_ptr<KeyFrame> current_keyframe)
   {
@@ -584,17 +583,17 @@ namespace pose_graph
         // updatePath();
       }
     }
-  }
+}
 
-  void PoseGraph::Save()
-  {
-    // Save keyframes to file
-    std::lock_guard<std::mutex> lock(keyframes_mutex_);
-    TicToc clock;
-    FILE *pFile;
-    printf("saving pose graph to: %s \n",
-           (config_.saved_pose_graph_dir + "pose_graph.txt").c_str());
-    std::string file_path = config_.saved_pose_graph_dir + "pose_graph.txt";
+void PoseGraph::Save()
+{
+  // Save keyframes to file
+  std::lock_guard<std::mutex> lock(keyframes_mutex_);
+  TicToc clock;
+  FILE *pFile;
+  printf("saving pose graph to: %s \n",
+          (config_.saved_pose_graph_dir + "pose_graph.txt").c_str());
+  std::string file_path = config_.saved_pose_graph_dir + "pose_graph.txt";
     pFile = fopen(file_path.c_str(), "w");
     for (auto keyframe : keyframes_)
     {
@@ -655,10 +654,9 @@ namespace pose_graph
     {
       event_observer_->OnPoseGraphSaved();
     }
-  }
-
-  bool PoseGraph::Load()
-  {
+}
+bool PoseGraph::Load()
+{
     // Load previously saved pose graph from file
     TicToc clock;
     FILE *pFile;
@@ -832,11 +830,11 @@ namespace pose_graph
     current_kf_thumb_image = keyframe->getThumbImage();
 
     return true;
-  }
+}
 
-  void PoseGraph::UpdateKeyFrameLoop(
+void PoseGraph::UpdateKeyFrameLoop(
       int index, const Eigen::Matrix<double, 8, 1> &loop_info)
-  {
+{
     auto keyframe = GetKeyFrame(index);
     if (!keyframe)
     {
@@ -872,9 +870,9 @@ namespace pose_graph
         drift_.yaw = shift_yaw;
         drift_.rotation = shift_r;
         drift_.translation = shift_t;
-      }
     }
   }
+}
 
   PoseGraph::Pose PoseGraph::GetImuCameraPose() const
   {
@@ -940,7 +938,6 @@ namespace pose_graph
       std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     } });
   }
-
   namespace
   {
     template <typename T>
