@@ -110,11 +110,15 @@ bool PoseGraphNode::Start() {
 }
 
 bool PoseGraphNode::ReadParameters() {
-  nh_.param<std::string>("config_file", config_file_path_);
-  nh_.param<int>("visualization_shift_x", visualization_shift_x_, 0);
-  nh_.param<int>("visualization_shift_y", visualization_shift_y_, 0);
-  nh_.param<int>("skip_cnt", skip_cnt_threshold_, 0);
-  nh_.param<double>("skip_dis", skip_distance_, 0.0);
+  if (!nh_.getParam("config_file", config_file_path_)) {
+    ROS_ERROR("Failed to read \"config_file\" parameter");
+    return false;
+  }
+
+  nh_.getParam("visualization_shift_x", visualization_shift_x_);
+  nh_.getParam("visualization_shift_y", visualization_shift_y_);
+  nh_.getParam("skip_cnt", skip_cnt_threshold_);
+  nh_.getParam("skip_dis", skip_distance_);
 
   ROS_INFO(
       "Loaded parameters: config_file: %s, visualization_shift_x: %d, "
