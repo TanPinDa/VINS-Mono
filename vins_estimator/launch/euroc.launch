@@ -1,6 +1,6 @@
 <launch>
     <arg name="config_path" default = "$(find feature_tracker_ros)/../config/euroc/euroc_config.yaml" />
-	  <arg name="vins_path" default = "$(find feature_tracker_ros)/../config/../" />
+	<arg name="vins_path" default = "$(find feature_tracker_ros)/../config/../" />
     
     <node name="feature_tracker" pkg="feature_tracker_ros" type="feature_tracker_node" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
@@ -12,7 +12,7 @@
        <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>
 
-    <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="screen">
+    <node name="pose_graph" pkg="pose_graph_ros" type="pose_graph_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <param name="visualization_shift_x" type="int" value="0" />
         <param name="visualization_shift_y" type="int" value="0" />
