@@ -16,8 +16,8 @@ add_subdirectory(src/ThirdParty)
 
 # -------- Add library --------
 add_library(pose_graph STATIC
+    src/details/keyframe.cpp
     src/pose_graph.cpp
-    src/keyframe.cpp
     )
 target_link_libraries(pose_graph PUBLIC
     ${OpenCV_LIBS}
