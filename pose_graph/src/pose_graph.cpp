@@ -441,7 +441,8 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
   int old_keyframe_loop_index = -1;
   std::vector<cv::Point2f> matched_2d_old_norm;
   std::vector<double> matched_id;
-  AddKeyFrame(current_keyframe, old_keyframe_loop_index, matched_2d_old_norm, matched_id);
+  AddKeyFrame(current_keyframe, old_keyframe_loop_index, matched_2d_old_norm,
+              matched_id);
 
   if (!event_observer_) {
     // If no observer is registered, the rest of the function is not needed.
@@ -535,7 +536,8 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
     if (current_keyframe->findConnection(
             old_keyframe, matched_2d_old_norm, matched_id,
             imu_camera_pose_.translation, imu_camera_pose_.rotation)) {
-      if (earliest_loop_index > old_keyframe_loop_index || earliest_loop_index == -1) {
+      if (earliest_loop_index > old_keyframe_loop_index ||
+          earliest_loop_index == -1) {
         earliest_loop_index = old_keyframe_loop_index;
       }
 
