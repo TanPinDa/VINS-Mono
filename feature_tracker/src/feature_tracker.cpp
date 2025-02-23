@@ -156,20 +156,17 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
   } else
     img = _img;
 
-  if (cur_img_.empty()) {
-    prev_img_ = cur_img_ = img;
-  } else {
-    cur_img_ = img;
+  if (prev_img_.empty()) {
+    prev_img_ = img;
   }
-
   curr_pts.clear();
 
   if (prev_pts.size() > 0) {
     TicToc t_o;
     vector<uchar> status;
     vector<float> err;
-    cv::calcOpticalFlowPyrLK(prev_img_, cur_img_, prev_pts, curr_pts, status,
-                             err, cv::Size(21, 21), 3);
+    cv::calcOpticalFlowPyrLK(prev_img_, img, prev_pts, curr_pts, status, err,
+                             cv::Size(21, 21), 3);
 
     for (int i = 0; i < int(curr_pts.size()); i++)
       if (status[i] && !inBorder(curr_pts[i], m_camera->imageWidth(),
@@ -203,8 +200,8 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
     if (n_max_cnt > 0) {
       if (mask.empty()) cout << "mask is empty " << endl;
       if (mask.type() != CV_8UC1) cout << "mask type wrong " << endl;
-      if (mask.size() != cur_img_.size()) cout << "wrong size " << endl;
-      cv::goodFeaturesToTrack(cur_img_, n_pts, n_max_cnt, 0.01,
+      if (mask.size() != img.size()) cout << "wrong size " << endl;
+      cv::goodFeaturesToTrack(img, n_pts, n_max_cnt, 0.01,
                               min_distance_between_features_, mask);
     } else
       n_pts.clear();
@@ -226,7 +223,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
                                         ids, track_cnt, pts_velocity);
     }
   }
-  prev_img_ = cur_img_;
+  prev_img_ = img;
   prev_pts = curr_pts;
   prev_time = cur_time;
 }
