@@ -52,7 +52,7 @@ class FeatureTracker {
 
   void rejectWithF();
 
-  void undistortedPoints();
+  void undistortedPoints(double dt);
 
   void RestartTracker();
 
@@ -71,7 +71,6 @@ class FeatureTracker {
   double fx_;
   double fy_;
   camodocal::CameraPtr m_camera;
-  double cur_time;
   double prev_time;
   double prev_prune_time;
 

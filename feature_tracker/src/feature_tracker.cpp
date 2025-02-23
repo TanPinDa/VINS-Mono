@@ -147,7 +147,6 @@ void FeatureTracker::addPoints() {
 void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
   cv::Mat img;
   TicToc t_r;
-  cur_time = _cur_time;
   if (run_histogram_equilisation_) {
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
     TicToc t_c;
@@ -213,10 +212,9 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
     spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     prev_prune_time = _cur_time;
 
-    // event_observer_->OnProcessedImage(_img,_cur_time,);
   }
 
-  undistortedPoints();
+  undistortedPoints(_cur_time - prev_time);
   if (is_prune_and_detect_new_points) {
     if (event_observer_) {
       event_observer_->OnProcessedImage(_img, _cur_time, curr_pts, cur_un_pts,
@@ -225,7 +223,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
   }
   prev_img_ = img;
   prev_pts = curr_pts;
-  prev_time = cur_time;
+  prev_time = _cur_time;
 }
 
 void FeatureTracker::rejectWithF() {
@@ -314,7 +312,7 @@ void FeatureTracker::showUndistortion(const string &name) {
   cv::waitKey(0);
 }
 
-void FeatureTracker::undistortedPoints() {
+void FeatureTracker::undistortedPoints(double dt) {
   map<int, cv::Point2f> cur_un_pts_map;
   cur_un_pts.clear();
 
@@ -329,7 +327,7 @@ void FeatureTracker::undistortedPoints() {
   }
   // caculate points velocity
   if (!prev_un_pts_map.empty()) {
-    double dt = cur_time - prev_time;
+
     pts_velocity.clear();
     for (unsigned int i = 0; i < cur_un_pts.size(); i++) {
       if (ids[i] != -1) {
