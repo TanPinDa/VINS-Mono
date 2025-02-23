@@ -51,16 +51,12 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
 void FeatureTracker::RegisterEventObserver(
     std::shared_ptr<FeatureTrackerObserver> event_observer) {
   event_observer_ = event_observer;
-  std::cout << "test" << std::endl;
   event_observer_->OnRegistered();
-  std::cout << "test2" << std::endl;
 }
 
 void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
                                      double current_image_time_s) {
-  std::cout << "Got a frame" << std::endl;
   if (is_first_frame_) {
-    std::cout << "First frame" << std::endl;
     is_first_frame_ = false;
     first_frame_time_ = current_image_time_s;
     previous_frame_time_ = current_image_time_s;
@@ -69,7 +65,6 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
   }
 
   if (current_image_time_s > previous_frame_time_ + max_time_difference_) {
-    std::cout << "Time diff too large" << std::endl;
     RestartTracker();
     if (event_observer_) {
       event_observer_->OnDurationBetweenFrameTooLarge(current_image_time_s,
@@ -79,7 +74,6 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
   }
 
   if (current_image_time_s < previous_frame_time_) {
-    std::cout << "went back in time" << std::endl;
     RestartTracker();
     if (event_observer_) {
       event_observer_->OnDurationBetweenFrameTooLarge(current_image_time_s,
@@ -88,12 +82,10 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     return;
   }
 
-  std::cout << "reading image" << std::endl;
   readImage(new_frame, current_image_time_s);
 
   for (unsigned int i = 0;; i++) {
     bool completed = false;
-    // std::cout << "updating id" << std::endl;
     completed |= updateID(i);
     if (!completed) break;
   }
@@ -156,22 +148,17 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
   cv::Mat img;
   TicToc t_r;
   cur_time = _cur_time;
-  std::cout << "test1" << std::endl;
   if (run_histogram_equilisation_) {
-    std::cout << "Doing histogram equailsation" << std::endl;
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
     TicToc t_c;
     clahe->apply(_img, img);
-    std::cout << "Applied histogram equailsation" << std::endl;
     spdlog::debug("CLAHE costs: {}ms", t_c.toc());
   } else
     img = _img;
 
   if (cur_img_.empty()) {
-    std::cout << "First iamge to setting data" << std::endl;
     prev_img_ = cur_img_ = img;
   } else {
-    std::cout << "set curr img" << std::endl;
     cur_img_ = img;
   }
 
