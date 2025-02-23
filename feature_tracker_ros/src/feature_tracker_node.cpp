@@ -18,14 +18,18 @@ queue<sensor_msgs::ImageConstPtr> img_buf;
 ros::Publisher pub_img, pub_match;
 ros::Publisher pub_restart;
 
-FeatureTracker trackerData[NUM_OF_CAM];
+FeatureTracker trackerData(); 
 double first_image_time;
 int pub_count = 1;
 bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
+
+
+
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
+  trackerData.ProcessNewFrame()
   if (first_image_flag) {
     first_image_flag = false;
     first_image_time = img_msg->header.stamp.toSec();
@@ -116,7 +120,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
     vector<set<int>> hash_ids(NUM_OF_CAM);
     for (int i = 0; i < NUM_OF_CAM; i++) {
       auto &un_pts = trackerData[i].cur_un_pts;
-      auto &cur_pts = trackerData[i].cur_pts;
+      auto &prev_pts = trackerData[i].prev_pts;
       auto &ids = trackerData[i].ids;
       auto &pts_velocity = trackerData[i].pts_velocity;
       for (unsigned int j = 0; j < ids.size(); j++) {
@@ -130,8 +134,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
 
           feature_points->points.push_back(p);
           id_of_point.values.push_back(p_id * NUM_OF_CAM + i);
-          u_of_point.values.push_back(cur_pts[j].x);
-          v_of_point.values.push_back(cur_pts[j].y);
+          u_of_point.values.push_back(prev_pts[j].x);
+          v_of_point.values.push_back(prev_pts[j].y);
           velocity_x_of_point.values.push_back(pts_velocity[j].x);
           velocity_y_of_point.values.push_back(pts_velocity[j].y);
         }
@@ -159,10 +163,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
         cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
         cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
 
-        for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++) {
+        for (unsigned int j = 0; j < trackerData[i].prev_pts.size(); j++) {
           double len =
               std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
-          cv::circle(tmp_img, trackerData[i].cur_pts[j], 2,
+          cv::circle(tmp_img, trackerData[i].prev_pts[j], 2,
                      cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
           // draw speed line
           /*
@@ -174,13 +178,13 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
           tmp_prev_un_pts.z() = 1;
           Vector2d tmp_prev_uv;
           trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
-          cv::line(tmp_img, trackerData[i].cur_pts[j],
+          cv::line(tmp_img, trackerData[i].prev_pts[j],
           cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0),
           1 , 8, 0);
           */
           // char name[10];
           // sprintf(name, "%d", trackerData[i].ids[j]);
-          // cv::putText(tmp_img, name, trackerData[i].cur_pts[j],
+          // cv::putText(tmp_img, name, trackerData[i].prev_pts[j],
           // cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
         }
       }

@@ -8,7 +8,7 @@ find_package(Eigen3 REQUIRED)
 find_package(spdlog REQUIRED)
 
 # Define your library target
-add_library(feature_tracker STATIC src/feature_tracker.cpp)
+add_library(feature_tracker STATIC src/feature_tracker.cpp src/feature_tracker_observer.cpp src/feature_tracker_observer_spdlog_rerun.cpp)
 target_link_libraries(feature_tracker PRIVATE ${OpenCV_LIBS} ${CERES_LIBRARIES} spdlog::spdlog_header_only camodocal::camodocal )
 
 # Set include directories
@@ -18,6 +18,11 @@ target_include_directories(feature_tracker
         $<INSTALL_INTERFACE:include>
 )
 
+add_executable(feature_tracker_run
+    src/main.cpp
+
+    )
+target_link_libraries(feature_tracker_run feature_tracker  ${OpenCV_LIBS} spdlog::spdlog_header_only)
 # Install the library
 include(GNUInstallDirs)
 install(TARGETS feature_tracker
