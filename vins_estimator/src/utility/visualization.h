@@ -20,45 +20,49 @@
 #include <fstream>
 #include <memory>
 
-class EstimatorPublisher
-{
-public:
-    EstimatorPublisher(ros::NodeHandle &n);
-    void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, const std_msgs::Header &header);
+class EstimatorPublisher {
+ public:
+  EstimatorPublisher(ros::NodeHandle &n);
+  void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q,
+                         const Eigen::Vector3d &V,
+                         const std_msgs::Header &header);
 
-    void printStatistics(const Estimator &estimator, double t);
+  void printStatistics(const Estimator &estimator, double t);
 
-    void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
+  void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
 
-    void pubInitialGuess(const Estimator &estimator, const std_msgs::Header &header);
+  void pubInitialGuess(const Estimator &estimator,
+                       const std_msgs::Header &header);
 
-    void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
+  void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header);
 
-    void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header);
+  void pubCameraPose(const Estimator &estimator,
+                     const std_msgs::Header &header);
 
-    void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header);
+  void pubPointCloud(const Estimator &estimator,
+                     const std_msgs::Header &header);
 
-    void pubTF(const Estimator &estimator, const std_msgs::Header &header);
+  void pubTF(const Estimator &estimator, const std_msgs::Header &header);
 
-    void pubKeyframe(const Estimator &estimator);
+  void pubKeyframe(const Estimator &estimator);
 
-    void pubRelocalization(const Estimator &estimator);
+  void pubRelocalization(const Estimator &estimator);
 
-private:
-    CameraPoseVisualization cameraposevisual;
-    CameraPoseVisualization keyframebasevisual;
-    ros::Publisher pub_odometry, pub_latest_odometry;
-    ros::Publisher pub_path, pub_relo_path;
-    ros::Publisher pub_point_cloud, pub_margin_cloud;
-    ros::Publisher pub_key_poses;
-    ros::Publisher pub_relo_relative_pose;
-    ros::Publisher pub_camera_pose;
-    ros::Publisher pub_camera_pose_visual;
-    nav_msgs::Path path, relo_path;
-    ros::Publisher pub_keyframe_pose;
-    ros::Publisher pub_keyframe_point;
-    ros::Publisher pub_extrinsic;
-    double sum_of_path;
+ private:
+  CameraPoseVisualization cameraposevisual;
+  CameraPoseVisualization keyframebasevisual;
+  ros::Publisher pub_odometry, pub_latest_odometry;
+  ros::Publisher pub_path, pub_relo_path;
+  ros::Publisher pub_point_cloud, pub_margin_cloud;
+  ros::Publisher pub_key_poses;
+  ros::Publisher pub_relo_relative_pose;
+  ros::Publisher pub_camera_pose;
+  ros::Publisher pub_camera_pose_visual;
+  nav_msgs::Path path, relo_path;
+  ros::Publisher pub_keyframe_pose;
+  ros::Publisher pub_keyframe_point;
+  ros::Publisher pub_extrinsic;
+  double sum_of_path;
 
-    Vector3d last_path;
+  Vector3d last_path;
 };
