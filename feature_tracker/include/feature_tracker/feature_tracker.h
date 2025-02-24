@@ -55,6 +55,7 @@ class FeatureTracker {
   void rejectWithF(vector<cv::Point2f> &curr_pts);
 
   void undistortedPoints(double dt, const vector<cv::Point2f> &curr_pts,
+                         vector<cv::Point2f> &cur_un_pts_out,
                          vector<cv::Point2f> &pts_velocity_out);
 
   void RestartTracker();
@@ -66,7 +67,7 @@ class FeatureTracker {
 
   vector<int> ids;
   vector<int> track_cnt;
-  vector<cv::Point2f> cur_un_pts;
+
   map<int, cv::Point2f> prev_un_pts_map;
 
   double fx_;

@@ -177,7 +177,6 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
     reduceVector(current_points, status);
     reduceVector(ids, status);
     reduceVector(track_cnt, status);
-
   }
 
   for (auto &n : track_cnt) n++;
@@ -185,7 +184,7 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
   // Prune and detect new points
   bool is_prune_and_detect_new_points =
       current_time > prev_prune_time + feature_pruning_period_;
-      
+
   if (is_prune_and_detect_new_points) {
     std::cout << "Time to prune and find new" << std::endl;
     rejectWithF(current_points);
@@ -213,10 +212,12 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
 
     prev_prune_time = current_time;
   }
-  
+
   vector<cv::Point2f> pts_velocity;
-  undistortedPoints(current_time - prev_time, current_points, pts_velocity);
-  
+  vector<cv::Point2f> cur_un_pts;
+  undistortedPoints(current_time - prev_time, current_points, cur_un_pts,
+                    pts_velocity);
+
   if (is_prune_and_detect_new_points) {
     if (event_observer_) {
       event_observer_->OnProcessedImage(img, current_time, current_points,
@@ -315,15 +316,16 @@ void FeatureTracker::showUndistortion(const string &name) {
 
 void FeatureTracker::undistortedPoints(double dt,
                                        const vector<cv::Point2f> &curr_pts,
+                                       vector<cv::Point2f> &cur_un_pts_out,
                                        vector<cv::Point2f> &pts_velocity_out) {
   map<int, cv::Point2f> cur_un_pts_map;
-  cur_un_pts.clear();
+  cur_un_pts_out.clear();
 
   for (unsigned int i = 0; i < curr_pts.size(); i++) {
     Eigen::Vector2d a(curr_pts[i].x, curr_pts[i].y);
     Eigen::Vector3d b;
     m_camera->liftProjective(a, b);
-    cur_un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
+    cur_un_pts_out.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
     cur_un_pts_map.insert(
         make_pair(ids[i], cv::Point2f(b.x() / b.z(), b.y() / b.z())));
     // printf("cur pts id %d %f %f", ids[i], cur_un_pts[i].x, cur_un_pts[i].y);
@@ -331,13 +333,13 @@ void FeatureTracker::undistortedPoints(double dt,
   // caculate points velocity
   if (!prev_un_pts_map.empty()) {
     pts_velocity_out.clear();
-    for (unsigned int i = 0; i < cur_un_pts.size(); i++) {
+    for (unsigned int i = 0; i < cur_un_pts_out.size(); i++) {
       if (ids[i] != -1) {
         std::map<int, cv::Point2f>::iterator it;
         it = prev_un_pts_map.find(ids[i]);
         if (it != prev_un_pts_map.end()) {
-          double v_x = (cur_un_pts[i].x - it->second.x) / dt;
-          double v_y = (cur_un_pts[i].y - it->second.y) / dt;
+          double v_x = (cur_un_pts_out[i].x - it->second.x) / dt;
+          double v_y = (cur_un_pts_out[i].y - it->second.y) / dt;
           pts_velocity_out.push_back(cv::Point2f(v_x, v_y));
         } else
           pts_velocity_out.push_back(cv::Point2f(0, 0));
