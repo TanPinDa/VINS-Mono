@@ -43,7 +43,8 @@ class FeatureTracker {
 
   void setMask(vector<cv::Point2f> &curr_pts);
 
-  void addPoints(vector<cv::Point2f> &curr_pts);
+  void addPoints(vector<cv::Point2f> &curr_pts,
+                 const vector<cv::Point2f> &newly_generated_points);
 
   bool updateID(unsigned int i);
 
@@ -60,7 +61,6 @@ class FeatureTracker {
   cv::Mat mask;
   cv::Mat fisheye_mask;
   cv::Mat prev_img_;
-  vector<cv::Point2f> n_pts;
   vector<cv::Point2f> prev_pts;
 
   vector<cv::Point2f> pts_velocity;

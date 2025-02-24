@@ -136,8 +136,10 @@ void FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
   }
 }
 
-void FeatureTracker::addPoints(vector<cv::Point2f> &curr_pts) {
-  for (auto &p : n_pts) {
+void FeatureTracker::addPoints(
+    vector<cv::Point2f> &curr_pts,
+    const vector<cv::Point2f> &newly_generated_points) {
+  for (auto &p : newly_generated_points) {
     curr_pts.push_back(p);
     ids.push_back(-1);
     track_cnt.push_back(1);
@@ -147,6 +149,7 @@ void FeatureTracker::addPoints(vector<cv::Point2f> &curr_pts) {
 void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
   cv::Mat pre_processed_img;
   vector<cv::Point2f> current_points;
+  vector<cv::Point2f> newly_generated_points;
 
   TicToc t_r;
   if (run_histogram_equilisation_) {
@@ -202,15 +205,15 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
       if (mask.type() != CV_8UC1) cout << "mask type wrong " << endl;
       if (mask.size() != pre_processed_img.size())
         cout << "wrong size " << endl;
-      cv::goodFeaturesToTrack(pre_processed_img, n_pts, n_max_cnt, 0.01,
-                              min_distance_between_features_, mask);
-    } else
-      n_pts.clear();
+      cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
+                              n_max_cnt, 0.01, min_distance_between_features_,
+                              mask);
+    }
     spdlog::debug("detect feature costs: {}ms", t_t.toc());
 
     spdlog::debug("add feature begins");
     TicToc t_a;
-    addPoints(current_points);
+    addPoints(current_points, newly_generated_points);
     spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     prev_prune_time = current_time;
   }
