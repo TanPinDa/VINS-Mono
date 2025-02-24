@@ -102,7 +102,7 @@ void FeatureTracker::RestartTracker() {
   return;
 }
 
-void FeatureTracker::setMask() {
+void FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
   if (fisheye_)
     mask = fisheye_mask.clone();
   else
@@ -136,7 +136,7 @@ void FeatureTracker::setMask() {
   }
 }
 
-void FeatureTracker::addPoints() {
+void FeatureTracker::addPoints(vector<cv::Point2f> &curr_pts) {
   for (auto &p : n_pts) {
     curr_pts.push_back(p);
     ids.push_back(-1);
@@ -144,35 +144,36 @@ void FeatureTracker::addPoints() {
   }
 }
 
-void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
-  cv::Mat img;
+void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
+  cv::Mat pre_processed_img;
+  vector<cv::Point2f> current_points;
+
   TicToc t_r;
   if (run_histogram_equilisation_) {
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
     TicToc t_c;
-    clahe->apply(_img, img);
+    clahe->apply(img, pre_processed_img);
     spdlog::debug("CLAHE costs: {}ms", t_c.toc());
   } else
-    img = _img;
+    pre_processed_img = img;
 
   if (prev_img_.empty()) {
-    prev_img_ = img;
+    prev_img_ = pre_processed_img;
   }
-  curr_pts.clear();
 
   if (prev_pts.size() > 0) {
     TicToc t_o;
     vector<uchar> status;
     vector<float> err;
-    cv::calcOpticalFlowPyrLK(prev_img_, img, prev_pts, curr_pts, status, err,
-                             cv::Size(21, 21), 3);
+    cv::calcOpticalFlowPyrLK(prev_img_, pre_processed_img, prev_pts,
+                             current_points, status, err, cv::Size(21, 21), 3);
 
-    for (int i = 0; i < int(curr_pts.size()); i++)
-      if (status[i] && !inBorder(curr_pts[i], m_camera->imageWidth(),
+    for (int i = 0; i < int(current_points.size()); i++)
+      if (status[i] && !inBorder(current_points[i], m_camera->imageWidth(),
                                  m_camera->imageHeight()))
         status[i] = 0;
     reduceVector(prev_pts, status);
-    reduceVector(curr_pts, status);
+    reduceVector(current_points, status);
     reduceVector(ids, status);
     reduceVector(track_cnt, status);
     spdlog::debug("temporal optical flow costs: {}ms", t_o.toc());
@@ -182,25 +183,26 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
 
   // Prune and detect new points
   bool is_prune_and_detect_new_points =
-      _cur_time > prev_prune_time + feature_pruning_period_;
+      current_time > prev_prune_time + feature_pruning_period_;
   if (is_prune_and_detect_new_points) {
     std::cout << "Time to prune and find new" << std::endl;
-    rejectWithF();
+    rejectWithF(current_points);
 
     spdlog::debug("set mask begins");
     TicToc t_m;
-    setMask();
+    setMask(current_points);
     spdlog::debug("set mask costs {}ms", t_m.toc());
 
     spdlog::debug("detect feature begins");
     TicToc t_t;
     int n_max_cnt =
-        max_feature_count_per_image_ - static_cast<int>(curr_pts.size());
+        max_feature_count_per_image_ - static_cast<int>(current_points.size());
     if (n_max_cnt > 0) {
       if (mask.empty()) cout << "mask is empty " << endl;
       if (mask.type() != CV_8UC1) cout << "mask type wrong " << endl;
-      if (mask.size() != img.size()) cout << "wrong size " << endl;
-      cv::goodFeaturesToTrack(img, n_pts, n_max_cnt, 0.01,
+      if (mask.size() != pre_processed_img.size())
+        cout << "wrong size " << endl;
+      cv::goodFeaturesToTrack(pre_processed_img, n_pts, n_max_cnt, 0.01,
                               min_distance_between_features_, mask);
     } else
       n_pts.clear();
@@ -208,25 +210,25 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time) {
 
     spdlog::debug("add feature begins");
     TicToc t_a;
-    addPoints();
+    addPoints(current_points);
     spdlog::debug("selectFeature costs: {}ms", t_a.toc());
-    prev_prune_time = _cur_time;
-
+    prev_prune_time = current_time;
   }
 
-  undistortedPoints(_cur_time - prev_time);
+  undistortedPoints(current_time - prev_time, current_points);
   if (is_prune_and_detect_new_points) {
     if (event_observer_) {
-      event_observer_->OnProcessedImage(_img, _cur_time, curr_pts, cur_un_pts,
-                                        ids, track_cnt, pts_velocity);
+      event_observer_->OnProcessedImage(img, current_time, current_points,
+                                        cur_un_pts, ids, track_cnt,
+                                        pts_velocity);
     }
   }
-  prev_img_ = img;
-  prev_pts = curr_pts;
-  prev_time = _cur_time;
+  prev_img_ = pre_processed_img;
+  prev_pts = current_points;
+  prev_time = current_time;
 }
 
-void FeatureTracker::rejectWithF() {
+void FeatureTracker::rejectWithF(vector<cv::Point2f> &curr_pts) {
   if (curr_pts.size() >= 8) {
     spdlog::debug("FM ransac begins");
     TicToc t_f;
@@ -312,7 +314,8 @@ void FeatureTracker::showUndistortion(const string &name) {
   cv::waitKey(0);
 }
 
-void FeatureTracker::undistortedPoints(double dt) {
+void FeatureTracker::undistortedPoints(double dt,
+                                       const vector<cv::Point2f> &curr_pts) {
   map<int, cv::Point2f> cur_un_pts_map;
   cur_un_pts.clear();
 
@@ -327,7 +330,6 @@ void FeatureTracker::undistortedPoints(double dt) {
   }
   // caculate points velocity
   if (!prev_un_pts_map.empty()) {
-
     pts_velocity.clear();
     for (unsigned int i = 0; i < cur_un_pts.size(); i++) {
       if (ids[i] != -1) {

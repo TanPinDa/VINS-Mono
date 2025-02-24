@@ -32,17 +32,18 @@ class FeatureTracker {
                  uint max_feature_count_per_image,
                  uint min_distance_between_features,
                  double fundemental_matrix_ransac_threshold, double fx,
-                 double fy, double feature_pruning_frequency,double max_time_difference);
+                 double fy, double feature_pruning_frequency,
+                 double max_time_difference);
   void RegisterEventObserver(
       std::shared_ptr<FeatureTrackerObserver> event_observer);
   void ProcessNewFrame(cv::Mat new_frame, double time_s);
 
  private:
-  void readImage(const cv::Mat &_img, double _cur_time);
+  void readImage(const cv::Mat &_img, double current_time);
 
-  void setMask();
+  void setMask(vector<cv::Point2f> &curr_pts);
 
-  void addPoints();
+  void addPoints(vector<cv::Point2f> &curr_pts);
 
   bool updateID(unsigned int i);
 
@@ -50,9 +51,9 @@ class FeatureTracker {
 
   void showUndistortion(const string &name);
 
-  void rejectWithF();
+  void rejectWithF(vector<cv::Point2f> &curr_pts);
 
-  void undistortedPoints(double dt);
+  void undistortedPoints(double dt, const vector<cv::Point2f> &curr_pts);
 
   void RestartTracker();
 
@@ -60,12 +61,12 @@ class FeatureTracker {
   cv::Mat fisheye_mask;
   cv::Mat prev_img_;
   vector<cv::Point2f> n_pts;
-  vector<cv::Point2f> prev_pts, curr_pts;
+  vector<cv::Point2f> prev_pts;
 
   vector<cv::Point2f> pts_velocity;
   vector<int> ids;
   vector<int> track_cnt;
-  vector<cv::Point2f> cur_un_pts; 
+  vector<cv::Point2f> cur_un_pts;
   map<int, cv::Point2f> prev_un_pts_map;
 
   double fx_;
