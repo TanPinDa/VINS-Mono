@@ -52,17 +52,19 @@ class FeatureTracker {
 
   void showUndistortion(const string &name);
 
-  void rejectWithF(vector<cv::Point2f> &curr_pts);
+  vector<uchar> rejectWithF(const vector<cv::Point2f> &cur_un_pts,
+                            const vector<cv::Point2f> &prev_un_pts);
 
-  void undistortedPoints(double dt, const vector<cv::Point2f> &curr_pts,
-                         vector<cv::Point2f> &cur_un_pts_out,
-                         vector<cv::Point2f> &pts_velocity_out);
+  void GetPointVelocty(double dt, const map<int, cv::Point2f> &cur_un_pts_map,
+                       const map<int, cv::Point2f> &prev_un_pts_map,
+                       vector<cv::Point2f> &pts_velocity_out);
 
   void RestartTracker();
 
   cv::Mat mask;
   cv::Mat fisheye_mask;
   cv::Mat prev_img_;
+  vector<cv::Point2f> prev_un_pts;
   vector<cv::Point2f> prev_pts;
 
   vector<int> ids;
