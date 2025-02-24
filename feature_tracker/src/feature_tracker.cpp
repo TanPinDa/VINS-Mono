@@ -46,6 +46,9 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
       max_time_difference_(max_time_difference) {
   readIntrinsicParameter(camera_config_file);
   feature_pruning_period_ = 1.0 / feature_pruning_frequency;
+  if (run_histogram_equilisation) {
+    clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+  }
 }
 
 void FeatureTracker::RegisterEventObserver(
@@ -151,12 +154,8 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
   vector<cv::Point2f> current_points;
   vector<cv::Point2f> newly_generated_points;
 
-  TicToc t_r;
   if (run_histogram_equilisation_) {
-    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-    TicToc t_c;
     clahe->apply(img, pre_processed_img);
-    spdlog::debug("CLAHE costs: {}ms", t_c.toc());
   } else
     pre_processed_img = img;
 
@@ -165,7 +164,6 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
   }
 
   if (prev_pts.size() > 0) {
-    TicToc t_o;
     vector<uchar> status;
     vector<float> err;
     cv::calcOpticalFlowPyrLK(prev_img_, pre_processed_img, prev_pts,
@@ -179,7 +177,7 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
     reduceVector(current_points, status);
     reduceVector(ids, status);
     reduceVector(track_cnt, status);
-    spdlog::debug("temporal optical flow costs: {}ms", t_o.toc());
+
   }
 
   for (auto &n : track_cnt) n++;
@@ -187,17 +185,16 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
   // Prune and detect new points
   bool is_prune_and_detect_new_points =
       current_time > prev_prune_time + feature_pruning_period_;
+      
   if (is_prune_and_detect_new_points) {
     std::cout << "Time to prune and find new" << std::endl;
     rejectWithF(current_points);
 
     spdlog::debug("set mask begins");
-    TicToc t_m;
+
     setMask(current_points);
-    spdlog::debug("set mask costs {}ms", t_m.toc());
 
     spdlog::debug("detect feature begins");
-    TicToc t_t;
     int n_max_cnt =
         max_feature_count_per_image_ - static_cast<int>(current_points.size());
     if (n_max_cnt > 0) {
@@ -209,16 +206,17 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
                               n_max_cnt, 0.01, min_distance_between_features_,
                               mask);
     }
-    spdlog::debug("detect feature costs: {}ms", t_t.toc());
 
     spdlog::debug("add feature begins");
-    TicToc t_a;
+
     addPoints(current_points, newly_generated_points);
-    spdlog::debug("selectFeature costs: {}ms", t_a.toc());
+
     prev_prune_time = current_time;
   }
+  
   vector<cv::Point2f> pts_velocity;
   undistortedPoints(current_time - prev_time, current_points, pts_velocity);
+  
   if (is_prune_and_detect_new_points) {
     if (event_observer_) {
       event_observer_->OnProcessedImage(img, current_time, current_points,
@@ -234,7 +232,6 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
 void FeatureTracker::rejectWithF(vector<cv::Point2f> &curr_pts) {
   if (curr_pts.size() >= 8) {
     spdlog::debug("FM ransac begins");
-    TicToc t_f;
     vector<cv::Point2f> un_cur_pts(prev_pts.size()),
         un_forw_pts(curr_pts.size());
     for (unsigned int i = 0; i < prev_pts.size(); i++) {
@@ -262,7 +259,6 @@ void FeatureTracker::rejectWithF(vector<cv::Point2f> &curr_pts) {
     reduceVector(track_cnt, status);
     spdlog::debug("FM ransac: {0} -> {1}: {2}", size_a, curr_pts.size(),
                   1.0 * curr_pts.size() / size_a);
-    spdlog::debug("FM ransac costs: {}ms", t_f.toc());
   }
 }
 

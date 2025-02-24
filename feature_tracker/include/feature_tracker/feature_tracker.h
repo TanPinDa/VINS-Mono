@@ -77,6 +77,8 @@ class FeatureTracker {
 
   static int n_id;
 
+  cv::Ptr<cv::CLAHE> clahe;
+
   bool fisheye_;
   bool run_histogram_equilisation_;
   uint max_feature_count_per_image_;
