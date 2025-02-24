@@ -217,8 +217,8 @@ void FeatureTracker::readImage(const cv::Mat &img, double current_time) {
     spdlog::debug("selectFeature costs: {}ms", t_a.toc());
     prev_prune_time = current_time;
   }
-
-  undistortedPoints(current_time - prev_time, current_points);
+  vector<cv::Point2f> pts_velocity;
+  undistortedPoints(current_time - prev_time, current_points, pts_velocity);
   if (is_prune_and_detect_new_points) {
     if (event_observer_) {
       event_observer_->OnProcessedImage(img, current_time, current_points,
@@ -318,7 +318,8 @@ void FeatureTracker::showUndistortion(const string &name) {
 }
 
 void FeatureTracker::undistortedPoints(double dt,
-                                       const vector<cv::Point2f> &curr_pts) {
+                                       const vector<cv::Point2f> &curr_pts,
+                                       vector<cv::Point2f> &pts_velocity_out) {
   map<int, cv::Point2f> cur_un_pts_map;
   cur_un_pts.clear();
 
@@ -333,7 +334,7 @@ void FeatureTracker::undistortedPoints(double dt,
   }
   // caculate points velocity
   if (!prev_un_pts_map.empty()) {
-    pts_velocity.clear();
+    pts_velocity_out.clear();
     for (unsigned int i = 0; i < cur_un_pts.size(); i++) {
       if (ids[i] != -1) {
         std::map<int, cv::Point2f>::iterator it;
@@ -341,16 +342,16 @@ void FeatureTracker::undistortedPoints(double dt,
         if (it != prev_un_pts_map.end()) {
           double v_x = (cur_un_pts[i].x - it->second.x) / dt;
           double v_y = (cur_un_pts[i].y - it->second.y) / dt;
-          pts_velocity.push_back(cv::Point2f(v_x, v_y));
+          pts_velocity_out.push_back(cv::Point2f(v_x, v_y));
         } else
-          pts_velocity.push_back(cv::Point2f(0, 0));
+          pts_velocity_out.push_back(cv::Point2f(0, 0));
       } else {
-        pts_velocity.push_back(cv::Point2f(0, 0));
+        pts_velocity_out.push_back(cv::Point2f(0, 0));
       }
     }
   } else {
     for (unsigned int i = 0; i < prev_pts.size(); i++) {
-      pts_velocity.push_back(cv::Point2f(0, 0));
+      pts_velocity_out.push_back(cv::Point2f(0, 0));
     }
   }
   prev_un_pts_map = cur_un_pts_map;
