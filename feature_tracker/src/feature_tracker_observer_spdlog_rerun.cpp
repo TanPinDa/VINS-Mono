@@ -36,9 +36,10 @@ void FeatureTrackerObserverSPDRerun::OnProcessedImage(
     std::vector<int> ids, std::vector<int> track_count,
     std::vector<cv::Point2f> points_velocity) {
   spdlog::info("Features have been pruned and new features added");
-  cv::Mat img = CreateTrackedFeatureImage(new_frame, features, track_count, 20);
+  cv::Mat img = CreateOpticalFlowImage(new_frame, features, track_count, 20,
+                                       points_velocity);
   cv::imshow("Image", img);
 
   // Wait for 100 milliseconds before moving to the next image
-  cv::waitKey(1);
+  cv::waitKey(100);
 }

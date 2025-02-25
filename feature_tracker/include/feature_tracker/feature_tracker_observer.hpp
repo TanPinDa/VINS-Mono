@@ -28,5 +28,11 @@ class FeatureTrackerObserver
                                     std::vector<cv::Point2f> features,
                                     std::vector<int> track_cnt,
                                     uint max_track_count);
+
+  cv::Mat CreateOpticalFlowImage(cv::Mat image,
+                                 std::vector<cv::Point2f> features,
+                                 std::vector<int> track_cnt,
+                                 uint max_track_count,
+                                 std::vector<cv::Point2f> points_velocity);
 };
 #endif /* FEATURE_TRACKER_OBSERVER_HPP */

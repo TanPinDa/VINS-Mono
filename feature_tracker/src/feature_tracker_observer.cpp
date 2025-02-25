@@ -14,3 +14,23 @@ cv::Mat FeatureTrackerObserver::CreateTrackedFeatureImage(
   }
   return show_img;
 }
+
+cv::Mat FeatureTrackerObserver::CreateOpticalFlowImage(
+    cv::Mat image, std::vector<cv::Point2f> features,
+    std::vector<int> track_cnt, uint max_track_count,
+    std::vector<cv::Point2f> points_velocity) {
+  cv::Mat show_img =
+      CreateTrackedFeatureImage(image, features, track_cnt, max_track_count);
+
+  for (size_t i = 0; i < points_velocity.size(); i++) {
+    cv::Point2f start = features[i];
+    // std::cout << "velocty: " << points_velocity[i].x << ", "
+    //           << points_velocity[i].y << std::endl;
+    cv::Point2f end =
+        start + (points_velocity[i])*10;  // Add velocity to get end point
+
+    cv::arrowedLine(show_img, start, end, cv::Scalar(0, 255, 0), 1,
+                    cv::LINE_AA);
+  }
+  return show_img;
+}
