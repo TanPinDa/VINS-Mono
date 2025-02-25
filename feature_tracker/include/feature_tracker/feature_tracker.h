@@ -43,10 +43,12 @@ class FeatureTracker {
 
   void setMask(vector<cv::Point2f> &curr_pts);
 
-  void addPoints(vector<cv::Point2f> &curr_pts,
+  void addPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
+                 const camodocal::CameraPtr m_camera,
                  const vector<cv::Point2f> &newly_generated_points);
 
-  bool updateID(unsigned int i);
+  cv::Point2f UndistortPoint(const cv::Point2f point,
+                             const camodocal::CameraPtr camera) const;
 
   void readIntrinsicParameter(const string &calib_file);
 
@@ -55,8 +57,8 @@ class FeatureTracker {
   vector<uchar> rejectWithF(const vector<cv::Point2f> &cur_un_pts,
                             const vector<cv::Point2f> &prev_un_pts);
 
-  void GetPointVelocty(double dt, const map<int, cv::Point2f> &cur_un_pts_map,
-                       const map<int, cv::Point2f> &prev_un_pts_map,
+  void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
+                       const vector<cv::Point2f> &prev_un_pts,
                        vector<cv::Point2f> &pts_velocity_out);
 
   void RestartTracker();
@@ -69,8 +71,6 @@ class FeatureTracker {
 
   vector<int> ids;
   vector<int> track_cnt;
-
-  map<int, cv::Point2f> prev_un_pts_map;
 
   double fx_;
   double fy_;
