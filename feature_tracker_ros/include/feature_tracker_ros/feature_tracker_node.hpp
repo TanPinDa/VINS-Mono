@@ -11,6 +11,7 @@
 #include "feature_tracker/feature_tracker_observer.hpp"
 
 class FeatureTrackerNode : public FeatureTrackerObserver {
+ public:
   ~FeatureTrackerNode();
   bool Start();
 
@@ -29,13 +30,17 @@ class FeatureTrackerNode : public FeatureTrackerObserver {
                         std::vector<int> ids, std::vector<int> track_count,
                         std::vector<cv::Point2f> points_velocity) final;
 
-  bool ReadParameters();
+  bool ReadParameters(std::string& configFilePath, int& maxFeatureCount,
+                      int& minFeatureDistance, int& pruningFrequency,
+                      double& ransacThreshold,
+                      bool& enableHistogramEqualization, bool& useFisheye);
 
-  void ImageCallback(const sensor_msgs::ImageConstPtr &img_msg);
+  void ImageCallback(const sensor_msgs::ImageConstPtr& img_msg);
 
   void StartPublishersAndSubscribers();
 
-  FeatureTracker feature_tracker;
+  std::unique_ptr<FeatureTracker> feature_tracker_;
+  cv_bridge::CvImage optical_flow_img_;
 
   int min_track_count_to_publish_;
   bool first_image_;
@@ -52,9 +57,7 @@ class FeatureTrackerNode : public FeatureTrackerObserver {
   sensor_msgs::ChannelFloat32 feature_x_velocity_channel_;
   sensor_msgs::ChannelFloat32 feature_y_velocity_channel_;
   ros::Time current_image_time_;
-
   std_msgs::Bool restart_flag_;
-  cv_bridge::CvImage optical_flow_img_;
   sensor_msgs::Image optical_flow_img_msg_;
 };
 
