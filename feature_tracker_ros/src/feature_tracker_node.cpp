@@ -3,8 +3,9 @@
 #include <cv_bridge/cv_bridge.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
-#include <opencv2/opencv.hpp>
+
 #include <iomanip>
+#include <opencv2/opencv.hpp>
 
 bool FeatureTrackerNode::Start() {
   restart_flag_.data = true;
@@ -21,10 +22,21 @@ bool FeatureTrackerNode::Start() {
   feature_x_velocity_channel_.name = "Feature X Velocity";
   feature_y_velocity_channel_.name = "Feature Y Velocity";
 
+  first_image_ = false;
+
   // Set this upon first camera message received
   optical_flow_img_.header.frame_id = "TODO";
   optical_flow_img_.encoding = sensor_msgs::image_encodings::BGR8;
   return true;
+}
+
+void FeatureTrackerNode::StartPublishersAndSubscribers() {
+  image_subscriber_ = n.subscribe(IMAGE_TOPIC, 100, img_callback);
+  feature_point_cloud_publisher_ =
+      n.advertise<sensor_msgs::PointCloud>("feature", 1000);
+  optical_flow_image_publisher_ =
+      n.advertise<sensor_msgs::Image>("feature_img", 1000);
+  pub_restart_ = n.advertise<std_msgs::Bool>("restart", 1000);
 }
 
 void FeatureTrackerNode::OnRegistered() {
@@ -89,12 +101,39 @@ void FeatureTrackerNode::OnProcessedImage(
   feature_point_cloud_publisher_.publish(feature_points_msg_);
 }
 
-void FeatureTrackerNode::img_callback(
+void FeatureTrackerNode::ImageCallback(
     const sensor_msgs::ImageConstPtr& img_msg) {
   current_image_time_ = img_msg->header.stamp;
-  cv_bridge::CvImagePtr cv_ptr =
-      cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::BGR8);
-//   feature_tracker.ProcessNewFrame(cv_ptr->image);
+  feature_tracker.ProcessNewFrame(
+      cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::BGR8)->image,
+      img_msg->header.stamp.toSec());
+  //   feature_tracker.ProcessNewFrame(cv_ptr->image);
 }
 
+bool FeatureTrackerNode::ReadParameters() {
+  if (!nh_.getParam("config_file", config_file_path_)) {
+    ROS_ERROR("Failed to read \"config_file\" parameter");
+    return false;
+  }
+
+  nh_.getParam("fisheye", fisheye_);
+  nh_.getParam("max_cnt", max_number_of_features_);
+  nh_.getParam("min_dist", minimum_distance_between_features_);
+  nh_.getParam("image_height", image_height_);
+  nh_.getParam("image_width", image_width_);
+  nh_.getParam("freq", pruning_frequency_);
+  nh_.getParam("F_threshold", ransac_threshold_);
+
+  nh_.getParam("equalize", run_histogram_equalisation_);
+  nh_.getParam("F_threshold", ransac_threshold_);
+  nh_.getParam("F_threshold", ransac_threshold_);
+
+  ROS_INFO(
+      "Loaded parameters: config_file: %s, visualization_shift_x: %d, "
+      "visualization_shift_y: %d, skip_cnt: %d, skip_dis: %f",
+      config_file_path_.c_str(), visualization_shift_x_, visualization_shift_y_,
+      skip_cnt_threshold_, skip_distance_);
+
+  return true;
+}
 int main(int argc, char** argv) {}

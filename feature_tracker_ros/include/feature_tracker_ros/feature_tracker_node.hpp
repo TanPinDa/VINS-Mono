@@ -29,11 +29,16 @@ class FeatureTrackerNode : public FeatureTrackerObserver {
                         std::vector<int> ids, std::vector<int> track_count,
                         std::vector<cv::Point2f> points_velocity) final;
 
-  void img_callback(const sensor_msgs::ImageConstPtr &img_msg);
+  bool ReadParameters();
+
+  void ImageCallback(const sensor_msgs::ImageConstPtr &img_msg);
+
+  void StartPublishersAndSubscribers();
 
   FeatureTracker feature_tracker;
 
   int min_track_count_to_publish_;
+  bool first_image_;
   ros::NodeHandle nh_{"~"};
   ros::Subscriber image_subscriber_;
   ros::Publisher optical_flow_image_publisher_;
@@ -51,7 +56,6 @@ class FeatureTrackerNode : public FeatureTrackerObserver {
   std_msgs::Bool restart_flag_;
   cv_bridge::CvImage optical_flow_img_;
   sensor_msgs::Image optical_flow_img_msg_;
-  
 };
 
 #endif /* FEATURE_TRACKER_NODE_HPP */
