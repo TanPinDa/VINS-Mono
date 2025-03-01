@@ -63,7 +63,6 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
                                      double current_image_time_s) {
   cv::Mat pre_processed_img;
   if (run_histogram_equilisation_) {
-    std::cout << "Running eq" << std::endl;
     clahe->apply(new_frame, pre_processed_img);
   } else
     pre_processed_img = new_frame;
@@ -86,7 +85,58 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     return;
   }
 
-  readImage(pre_processed_img, current_image_time_s);
+  vector<cv::Point2f> current_points;
+  if (previous_points_.size() > 0) {
+    vector<uchar> status;
+    vector<float> err;
+    cv::calcOpticalFlowPyrLK(previous_pre_processed_image_, pre_processed_img,
+                             previous_points_, current_points, status, err,
+                             cv::Size(21, 21), 3);
+
+    for (int i = 0; i < int(current_points.size()); i++)
+      if (status[i] && !inBorder(current_points[i], m_camera->imageWidth(),
+                                 m_camera->imageHeight()))
+        status[i] = 0;
+    reduceVector(previous_points_, status);
+    reduceVector(previous_undistorted_pts_, status);
+    reduceVector(current_points, status);
+    reduceVector(feature_ids_, status);
+    reduceVector(track_cnt, status);
+  }
+  for (auto &n : track_cnt) n++;
+
+  vector<cv::Point2f> cur_un_pts;
+  for (unsigned int i = 0; i < current_points.size(); i++) {
+    cur_un_pts.push_back(UndistortPoint(current_points[i], m_camera));
+  }
+  // Prune and detect new points
+  bool is_prune_and_detect_new_points =
+      current_image_time_s > prev_prune_time_ + feature_pruning_period_;
+
+  if (is_prune_and_detect_new_points) {
+    PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_,
+                           previous_undistorted_pts_, feature_ids_, track_cnt);
+    int n_max_cnt =
+        max_feature_count_per_image_ - static_cast<int>(current_points.size());
+    DetectNewFeaturePoints(current_points, cur_un_pts, pre_processed_img,
+                           n_max_cnt);
+    vector<cv::Point2f> pts_velocity;
+
+    GetPointVelocty(current_image_time_s - previous_frame_time_, cur_un_pts,
+                    previous_undistorted_pts_, pts_velocity);
+
+    if (event_observer_) {
+      event_observer_->OnProcessedImage(pre_processed_img, current_image_time_s,
+                                        current_points, cur_un_pts,
+                                        feature_ids_, track_cnt, pts_velocity);
+    }
+    prev_prune_time_ = current_image_time_s;
+  }
+
+  previous_undistorted_pts_ = cur_un_pts;
+  previous_pre_processed_image_ = pre_processed_img;
+  previous_points_ = current_points;
+  previous_frame_time_ = current_image_time_s;
 }
 
 void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
@@ -98,8 +148,8 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   previous_undistorted_pts_.clear();
   feature_ids_.clear();
   track_cnt.clear();
-  DetectNewFeaturePoints(previous_points_, previous_undistorted_pts_, pre_processed_img,
-                         max_feature_count_per_image_);
+  DetectNewFeaturePoints(previous_points_, previous_undistorted_pts_,
+                         pre_processed_img, max_feature_count_per_image_);
 
   previous_frame_time_ = current_time;
   prev_prune_time_ = current_time;
@@ -144,7 +194,7 @@ cv::Mat FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
   return mask;
 }
 
-void FeatureTracker::addPoints(
+void FeatureTracker::AddPoints(
     vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
     const camodocal::CameraPtr m_camera,
     const vector<cv::Point2f> &newly_generated_points) {
@@ -167,70 +217,14 @@ void FeatureTracker::DetectNewFeaturePoints(
     cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
                             n_max_point_to_detect, 0.01,
                             min_distance_between_features_, mask);
-    addPoints(current_points, current_undistorted_points, m_camera,
+    AddPoints(current_points, current_undistorted_points, m_camera,
               newly_generated_points);
   }
-}
-void FeatureTracker::readImage(const cv::Mat &pre_processed_img,
-                               double current_time) {
-  vector<cv::Point2f> current_points;
-
-  if (previous_points_.size() > 0) {
-    vector<uchar> status;
-    vector<float> err;
-    cv::calcOpticalFlowPyrLK(previous_pre_processed_image_, pre_processed_img, previous_points_,
-                             current_points, status, err, cv::Size(21, 21), 3);
-
-    for (int i = 0; i < int(current_points.size()); i++)
-      if (status[i] && !inBorder(current_points[i], m_camera->imageWidth(),
-                                 m_camera->imageHeight()))
-        status[i] = 0;
-    reduceVector(previous_points_, status);
-    reduceVector(previous_undistorted_pts_, status);
-    reduceVector(current_points, status);
-    reduceVector(feature_ids_, status);
-    reduceVector(track_cnt, status);
-  }
-  for (auto &n : track_cnt) n++;
-
-  vector<cv::Point2f> cur_un_pts;
-
-  for (unsigned int i = 0; i < current_points.size(); i++) {
-    cur_un_pts.push_back(UndistortPoint(current_points[i], m_camera));
-  }
-  // Prune and detect new points
-  bool is_prune_and_detect_new_points =
-      current_time > prev_prune_time_ + feature_pruning_period_;
-
-  if (is_prune_and_detect_new_points) {
-    PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_, previous_undistorted_pts_,
-                           feature_ids_, track_cnt);
-    int n_max_cnt =
-        max_feature_count_per_image_ - static_cast<int>(current_points.size());
-    DetectNewFeaturePoints(current_points, cur_un_pts, pre_processed_img,
-                           n_max_cnt);
-    vector<cv::Point2f> pts_velocity;
-
-    GetPointVelocty(current_time - previous_frame_time_, cur_un_pts,
-                    previous_undistorted_pts_, pts_velocity);
-
-    if (event_observer_) {
-      event_observer_->OnProcessedImage(pre_processed_img, current_time,
-                                        current_points, cur_un_pts,
-                                        feature_ids_, track_cnt, pts_velocity);
-    }
-    prev_prune_time_ = current_time;
-  }
-
-  previous_undistorted_pts_ = cur_un_pts;
-  previous_pre_processed_image_ = pre_processed_img;
-  previous_points_ = current_points;
-  previous_frame_time_ = current_time;
 }
 
 vector<uchar> FeatureTracker::rejectWithF(
     const vector<cv::Point2f> &cur_un_pts,
-    const vector<cv::Point2f> &prev_un_pts) {
+    const vector<cv::Point2f> &prev_un_pts) const {
   vector<uchar> status;
   if (cur_un_pts.size() < 8) {
     return status;
@@ -262,7 +256,7 @@ void FeatureTracker::PrunePointsUsingRansac(
     vector<cv::Point2f> &current_undistorted_points,
     vector<cv::Point2f> &previous_points,
     vector<cv::Point2f> &previous_undistorted_points, vector<int> &ids,
-    vector<int> &track_counts) {
+    vector<int> &track_counts) const {
   vector<uchar> status =
       rejectWithF(current_undistorted_points, previous_undistorted_points);
   reduceVector(current_points, status);
@@ -305,7 +299,8 @@ void FeatureTracker::showUndistortion(const string &name) {
         pp.at<float>(0, 0) + 300 < m_camera->imageWidth() + 600) {
       undistortedImg.at<uchar>(pp.at<float>(1, 0) + 300,
                                pp.at<float>(0, 0) + 300) =
-          previous_pre_processed_image_.at<uchar>(distortedp[i].y(), distortedp[i].x());
+          previous_pre_processed_image_.at<uchar>(distortedp[i].y(),
+                                                  distortedp[i].x());
     } else {
       // spdlog::error("({0} {1}) -> ({2} {3})", distortedp[i].y,
       // distortedp[i].x, pp.at<float>(1, 0), pp.at<float>(0, 0));
@@ -318,7 +313,7 @@ void FeatureTracker::showUndistortion(const string &name) {
 void FeatureTracker::GetPointVelocty(double dt,
                                      const vector<cv::Point2f> &cur_un_pts,
                                      const vector<cv::Point2f> &prev_un_pts,
-                                     vector<cv::Point2f> &pts_velocity_out) {
+                                     vector<cv::Point2f> &pts_velocity_out) const {
   pts_velocity_out.clear();
 
   for (unsigned int i = 0; i < prev_un_pts.size(); i++) {
@@ -336,12 +331,13 @@ cv::Point2f FeatureTracker::UndistortPoint(
   return cv::Point2f(b.x() / b.z(), b.y() / b.z());
 }
 
-std::string FeatureTracker::GenerateStateString() {
+std::string FeatureTracker::GenerateStateString() const {
   std::stringstream ss;
   ss << "REPORTING CURRENT STATE"
      << "\n\t Previous time is:" << previous_frame_time_
      << "\n\t Previous prune time is:" << prev_prune_time_
      << "\n\t Previous number of points is: " << previous_points_.size()
-     << "\n\t Previous number of undistorted points is: " << previous_undistorted_pts_.size();
+     << "\n\t Previous number of undistorted points is: "
+     << previous_undistorted_pts_.size();
   return ss.str();
 }

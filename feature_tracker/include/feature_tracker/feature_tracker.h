@@ -39,22 +39,23 @@ class FeatureTracker {
   void ProcessNewFrame(cv::Mat img, double time_s);
 
  private:
-  void readImage(const cv::Mat &pre_processed_img, double current_time);
   void RestartTracker(const cv::Mat &pre_processed_img, double current_time);
+
   cv::Mat setMask(vector<cv::Point2f> &curr_pts);
 
-  void addPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
+  void AddPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
                  const camodocal::CameraPtr m_camera,
                  const vector<cv::Point2f> &newly_generated_points);
 
-  cv::Point2f UndistortPoint(const cv::Point2f point,
-                             const camodocal::CameraPtr camera) const;
   void PrunePointsUsingRansac(vector<cv::Point2f> &curr_points,
                               vector<cv::Point2f> &curr_un_points,
                               vector<cv::Point2f> &prev_points,
                               vector<cv::Point2f> &prev_un_points,
-                              vector<int> &ids, vector<int> &track_counts);
+                              vector<int> &ids,
+                              vector<int> &track_counts) const;
 
+  vector<uchar> rejectWithF(const vector<cv::Point2f> &cur_un_pts,
+                            const vector<cv::Point2f> &prev_un_pts) const;
   void DetectNewFeaturePoints(vector<cv::Point2f> &current_points,
                               vector<cv::Point2f> &current_undistorted_points,
                               const cv::Mat &pre_processed_img,
@@ -63,14 +64,14 @@ class FeatureTracker {
 
   void showUndistortion(const string &name);
 
-  vector<uchar> rejectWithF(const vector<cv::Point2f> &cur_un_pts,
-                            const vector<cv::Point2f> &prev_un_pts);
-
   void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
                        const vector<cv::Point2f> &prev_un_pts,
-                       vector<cv::Point2f> &pts_velocity_out);
+                       vector<cv::Point2f> &pts_velocity_out) const;
 
-  std::string GenerateStateString();
+  cv::Point2f UndistortPoint(const cv::Point2f point,
+                             const camodocal::CameraPtr camera) const;
+
+  std::string GenerateStateString() const;
 
   cv::Mat fisheye_mask;
 
