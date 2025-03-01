@@ -36,12 +36,12 @@ class FeatureTracker {
                  double max_time_difference);
   void RegisterEventObserver(
       std::shared_ptr<FeatureTrackerObserver> event_observer);
-  void ProcessNewFrame(cv::Mat new_frame, double time_s);
+  void ProcessNewFrame(cv::Mat img, double time_s);
 
  private:
-  void readImage(const cv::Mat &_img, double current_time);
-
-  void setMask(vector<cv::Point2f> &curr_pts);
+  void readImage(const cv::Mat &pre_processed_img, double current_time);
+  void RestartTracker(const cv::Mat &pre_processed_img, double current_time);
+  cv::Mat setMask(vector<cv::Point2f> &curr_pts);
 
   void addPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
                  const camodocal::CameraPtr m_camera,
@@ -49,7 +49,16 @@ class FeatureTracker {
 
   cv::Point2f UndistortPoint(const cv::Point2f point,
                              const camodocal::CameraPtr camera) const;
+  void PrunePointsUsingRansac(vector<cv::Point2f> &curr_points,
+                              vector<cv::Point2f> &curr_un_points,
+                              vector<cv::Point2f> &prev_points,
+                              vector<cv::Point2f> &prev_un_points,
+                              vector<int> &ids, vector<int> &track_counts);
 
+  void DetectNewFeaturePoints(vector<cv::Point2f> &current_points,
+                              vector<cv::Point2f> &current_undistorted_points,
+                              const cv::Mat &pre_processed_img,
+                              int n_max_point_to_detect);
   void readIntrinsicParameter(const string &calib_file);
 
   void showUndistortion(const string &name);
@@ -61,22 +70,21 @@ class FeatureTracker {
                        const vector<cv::Point2f> &prev_un_pts,
                        vector<cv::Point2f> &pts_velocity_out);
 
-  void RestartTracker();
+  std::string GenerateStateString();
 
-  cv::Mat mask;
   cv::Mat fisheye_mask;
+
   cv::Mat prev_img_;
+  double previous_frame_time_;
   vector<cv::Point2f> prev_un_pts;
   vector<cv::Point2f> prev_pts;
-
-  vector<int> ids;
+  vector<int> feature_ids_;
   vector<int> track_cnt;
+  double prev_prune_time_;
 
   double fx_;
   double fy_;
   camodocal::CameraPtr m_camera;
-  double prev_time;
-  double prev_prune_time;
 
   static int n_id;
 
@@ -87,9 +95,7 @@ class FeatureTracker {
   uint max_feature_count_per_image_;
   uint min_distance_between_features_;
   double fundemental_matrix_ransac_threshold_;
-  bool is_first_frame_;
-  double first_frame_time_;
-  double previous_frame_time_;
+
   double max_time_difference_;
   double feature_pruning_frequency_;
   double feature_pruning_period_;
