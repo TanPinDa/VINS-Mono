@@ -74,10 +74,10 @@ class FeatureTracker {
 
   cv::Mat fisheye_mask;
 
-  cv::Mat prev_img_;
+  cv::Mat previous_pre_processed_image_;
   double previous_frame_time_;
-  vector<cv::Point2f> prev_un_pts;
-  vector<cv::Point2f> prev_pts;
+  vector<cv::Point2f> previous_undistorted_pts_;
+  vector<cv::Point2f> previous_points_;
   vector<int> feature_ids_;
   vector<int> track_cnt;
   double prev_prune_time_;
