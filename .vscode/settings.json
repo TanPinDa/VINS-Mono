@@ -74,5 +74,9 @@
     "cmake.sourceDirectory": "/home/rosdev/workspace/ros_ws/src/VINS-Mono/benchmark_publisher",
     "C_Cpp.clang_format_fallbackStyle": "Google",
     "C_Cpp.clang_format_style": "Google",
+    "C_Cpp.clang_format_sortIncludes": false,
     "C_Cpp.default.cppStandard": "c++17",
+    "C/C++ Include Guard.Macro Type": "Filepath",
+    "C/C++ Include Guard.Path Depth": 1,
+    "C/C++ Include Guard.Remove Extension": false
 }
