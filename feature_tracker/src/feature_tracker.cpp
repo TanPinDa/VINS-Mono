@@ -4,26 +4,19 @@
 #include <sstream>
 
 #include "spdlog/spdlog.h"
-int FeatureTracker::n_id = 0;
+int FeatureTracker::feature_counter_ = 0;
 
-bool inBorder(const cv::Point2f &pt, uint col, uint row) {
-  const int BORDER_SIZE = 1;
-  int img_x = cvRound(pt.x);
-  int img_y = cvRound(pt.y);
-  return BORDER_SIZE <= img_x && img_x < col - BORDER_SIZE &&
-         BORDER_SIZE <= img_y && img_y < row - BORDER_SIZE;
+bool inBorder(const cv::Point2f &pt, const uint col, const uint row,
+              const uint border_size = 1) {
+  int x = cvRound(pt.x), y = cvRound(pt.y);
+  return (x >= border_size && x < col - border_size) &&
+         (y >= border_size && y < row - border_size);
 }
 
-void reduceVector(vector<cv::Point2f> &v, vector<uchar> status) {
+template <typename T>
+void reduceVector(vector<T> &v, const vector<uchar> status) {
   int j = 0;
-  for (int i = 0; i < int(v.size()); i++)
-    if (status[i]) v[j++] = v[i];
-  v.resize(j);
-}
-
-void reduceVector(vector<int> &v, vector<uchar> status) {
-  int j = 0;
-  for (int i = 0; i < int(v.size()); i++)
+  for (size_t i = 0; i < int(v.size()); i++)
     if (status[i]) v[j++] = v[i];
   v.resize(j);
 }
@@ -49,7 +42,7 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
   readIntrinsicParameter(camera_config_file);
   feature_pruning_period_ = 1.0 / feature_pruning_frequency;
   if (run_histogram_equilisation) {
-    clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+    clahe_ = cv::createCLAHE(3.0, cv::Size(8, 8));
   }
 }
 
@@ -63,7 +56,7 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
                                      double current_image_time_s) {
   cv::Mat pre_processed_img;
   if (run_histogram_equilisation_) {
-    clahe->apply(new_frame, pre_processed_img);
+    clahe_->apply(new_frame, pre_processed_img);
   } else
     pre_processed_img = new_frame;
 
@@ -84,8 +77,10 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     RestartTracker(pre_processed_img, current_image_time_s);
     return;
   }
-
+  // Find new feature points by optical flow
   vector<cv::Point2f> current_points;
+  vector<cv::Point2f> cur_un_pts;
+
   if (previous_points_.size() > 0) {
     vector<uchar> status;
     vector<float> err;
@@ -93,7 +88,7 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
                              previous_points_, current_points, status, err,
                              cv::Size(21, 21), 3);
 
-    for (int i = 0; i < int(current_points.size()); i++)
+    for (size_t i = 0; i < current_points.size(); i++)
       if (status[i] && !inBorder(current_points[i], m_camera->imageWidth(),
                                  m_camera->imageHeight()))
         status[i] = 0;
@@ -101,34 +96,29 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     reduceVector(previous_undistorted_pts_, status);
     reduceVector(current_points, status);
     reduceVector(feature_ids_, status);
-    reduceVector(track_cnt, status);
-  }
-  for (auto &n : track_cnt) n++;
+    reduceVector(feature_track_lengh_, status);
 
-  vector<cv::Point2f> cur_un_pts;
-  for (unsigned int i = 0; i < current_points.size(); i++) {
-    cur_un_pts.push_back(UndistortPoint(current_points[i], m_camera));
-  }
-  // Prune and detect new points
-  bool is_prune_and_detect_new_points =
-      current_image_time_s > prev_prune_time_ + feature_pruning_period_;
-
-  if (is_prune_and_detect_new_points) {
+    for (size_t i = 0; i < current_points.size(); i++) {
+      cur_un_pts.push_back(UndistortPoint(current_points[i], m_camera));
+    }
+    for (int &n : feature_track_lengh_) n++;
+  }  // Prune and detect new points
+  if (current_image_time_s > prev_prune_time_ + feature_pruning_period_) {
     PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_,
-                           previous_undistorted_pts_, feature_ids_, track_cnt);
-    int n_max_cnt =
-        max_feature_count_per_image_ - static_cast<int>(current_points.size());
-    DetectNewFeaturePoints(current_points, cur_un_pts, pre_processed_img,
-                           n_max_cnt);
-    vector<cv::Point2f> pts_velocity;
+                           previous_undistorted_pts_, feature_ids_,
+                           feature_track_lengh_);
+    DetectNewFeaturePoints(
+        current_points, cur_un_pts, pre_processed_img,
+        max_feature_count_per_image_ - current_points.size());
 
+    vector<cv::Point2f> pts_velocity;
     GetPointVelocty(current_image_time_s - previous_frame_time_, cur_un_pts,
                     previous_undistorted_pts_, pts_velocity);
 
     if (event_observer_) {
-      event_observer_->OnProcessedImage(pre_processed_img, current_image_time_s,
-                                        current_points, cur_un_pts,
-                                        feature_ids_, track_cnt, pts_velocity);
+      event_observer_->OnProcessedImage(
+          pre_processed_img, current_image_time_s, current_points, cur_un_pts,
+          feature_ids_, feature_track_lengh_, pts_velocity);
     }
     prev_prune_time_ = current_image_time_s;
   }
@@ -147,14 +137,13 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   previous_points_.clear();
   previous_undistorted_pts_.clear();
   feature_ids_.clear();
-  track_cnt.clear();
+  feature_track_lengh_.clear();
   DetectNewFeaturePoints(previous_points_, previous_undistorted_pts_,
                          pre_processed_img, max_feature_count_per_image_);
 
   previous_frame_time_ = current_time;
   prev_prune_time_ = current_time;
   previous_pre_processed_image_ = pre_processed_img;
-  std::cout << GenerateStateString() << std::endl;
   return;
 }
 
@@ -169,9 +158,9 @@ cv::Mat FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
   // prefer to keep features that are tracked for long time
   vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
-  for (unsigned int i = 0; i < curr_pts.size(); i++)
-    cnt_pts_id.push_back(
-        make_pair(track_cnt[i], make_pair(curr_pts[i], feature_ids_[i])));
+  for (size_t i = 0; i < curr_pts.size(); i++)
+    cnt_pts_id.push_back(make_pair(feature_track_lengh_[i],
+                                   make_pair(curr_pts[i], feature_ids_[i])));
 
   sort(cnt_pts_id.begin(), cnt_pts_id.end(),
        [](const pair<int, pair<cv::Point2f, int>> &a,
@@ -181,13 +170,13 @@ cv::Mat FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
 
   curr_pts.clear();
   feature_ids_.clear();
-  track_cnt.clear();
+  feature_track_lengh_.clear();
 
   for (auto &it : cnt_pts_id) {
     if (mask.at<uchar>(it.second.first) == 255) {
       curr_pts.push_back(it.second.first);
       feature_ids_.push_back(it.second.second);
-      track_cnt.push_back(it.first);
+      feature_track_lengh_.push_back(it.first);
       cv::circle(mask, it.second.first, min_distance_between_features_, 0, -1);
     }
   }
@@ -198,12 +187,11 @@ void FeatureTracker::AddPoints(
     vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
     const camodocal::CameraPtr m_camera,
     const vector<cv::Point2f> &newly_generated_points) {
-  for (auto &p : newly_generated_points) {
-    int new_point_id = ++n_id;
+  for (const cv::Point2f &p : newly_generated_points) {
     curr_pts.push_back(p);
     cur_un_pts.push_back(UndistortPoint(p, m_camera));
-    feature_ids_.push_back(new_point_id);
-    track_cnt.push_back(1);
+    feature_ids_.push_back(feature_counter_++);
+    feature_track_lengh_.push_back(1);
   }
 }
 
@@ -230,11 +218,10 @@ vector<uchar> FeatureTracker::rejectWithF(
     return status;
   }
 
-  spdlog::debug("FM ransac begins");
   vector<cv::Point2f> curr_scaled_undistorted_pts(cur_un_pts.size()),
       prev_scaled_undistorted_pts(prev_un_pts.size());
 
-  for (unsigned int i = 0; i < prev_un_pts.size(); i++) {
+  for (size_t i = 0; i < prev_un_pts.size(); i++) {
     curr_scaled_undistorted_pts[i] =
         cv::Point2f(fx_ * cur_un_pts[i].x + m_camera->imageWidth() / 2.0,
                     fy_ * cur_un_pts[i].y + m_camera->imageHeight() / 2.0);
@@ -275,8 +262,8 @@ void FeatureTracker::showUndistortion(const string &name) {
   cv::Mat undistortedImg(m_camera->imageHeight() + 600,
                          m_camera->imageWidth() + 600, CV_8UC1, cv::Scalar(0));
   vector<Eigen::Vector2d> distortedp, undistortedp;
-  for (int i = 0; i < m_camera->imageWidth(); i++)
-    for (int j = 0; j < m_camera->imageHeight(); j++) {
+  for (size_t i = 0; i < m_camera->imageWidth(); i++)
+    for (size_t j = 0; j < m_camera->imageHeight(); j++) {
       Eigen::Vector2d a(i, j);
       Eigen::Vector3d b;
       m_camera->liftProjective(a, b);
@@ -284,7 +271,7 @@ void FeatureTracker::showUndistortion(const string &name) {
       undistortedp.push_back(Eigen::Vector2d(b.x() / b.z(), b.y() / b.z()));
       // printf("%f,%f->%f,%f,%f\n)\n", a.x(), a.y(), b.x(), b.y(), b.z());
     }
-  for (int i = 0; i < int(undistortedp.size()); i++) {
+  for (size_t i = 0; i < undistortedp.size(); i++) {
     cv::Mat pp(3, 1, CV_32FC1);
     pp.at<float>(0, 0) = undistortedp[i].x() * fx_ + m_camera->imageWidth() / 2;
     pp.at<float>(1, 0) =
@@ -310,16 +297,20 @@ void FeatureTracker::showUndistortion(const string &name) {
   cv::waitKey(0);
 }
 
-void FeatureTracker::GetPointVelocty(double dt,
-                                     const vector<cv::Point2f> &cur_un_pts,
-                                     const vector<cv::Point2f> &prev_un_pts,
-                                     vector<cv::Point2f> &pts_velocity_out) const {
+void FeatureTracker::GetPointVelocty(
+    double dt, const vector<cv::Point2f> &cur_un_pts,
+    const vector<cv::Point2f> &prev_un_pts,
+    vector<cv::Point2f> &pts_velocity_out) const {
   pts_velocity_out.clear();
 
-  for (unsigned int i = 0; i < prev_un_pts.size(); i++) {
-    cv::Point2f point_velocity((cur_un_pts[i].x - prev_un_pts[i].x) / dt,
-                               (cur_un_pts[i].y - prev_un_pts[i].y) / dt);
-    pts_velocity_out.push_back(point_velocity);
+  for (size_t i = 0; i < cur_un_pts.size(); i++) {
+    if (i < prev_un_pts.size()) {
+      cv::Point2f point_velocity((cur_un_pts[i].x - prev_un_pts[i].x) / dt,
+                                 (cur_un_pts[i].y - prev_un_pts[i].y) / dt);
+      pts_velocity_out.push_back(point_velocity);
+    } else {
+      pts_velocity_out.push_back(cv::Point2f(0, 0));
+    }
   }
 }
 

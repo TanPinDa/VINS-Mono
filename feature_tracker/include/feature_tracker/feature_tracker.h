@@ -20,11 +20,6 @@ using namespace std;
 using namespace camodocal;
 using namespace Eigen;
 
-bool inBorder(const cv::Point2f &pt);
-
-void reduceVector(vector<cv::Point2f> &v, vector<uchar> status);
-void reduceVector(vector<int> &v, vector<uchar> status);
-
 class FeatureTracker {
  public:
   FeatureTracker(std::string camera_config_file, bool fisheye,
@@ -80,16 +75,17 @@ class FeatureTracker {
   vector<cv::Point2f> previous_undistorted_pts_;
   vector<cv::Point2f> previous_points_;
   vector<int> feature_ids_;
-  vector<int> track_cnt;
+  vector<int> feature_track_lengh_;
   double prev_prune_time_;
 
   double fx_;
   double fy_;
   camodocal::CameraPtr m_camera;
 
-  static int n_id;
+  static int feature_counter_;  // Static to ensure unique id between different
+                                // instances
 
-  cv::Ptr<cv::CLAHE> clahe;
+  cv::Ptr<cv::CLAHE> clahe_;
 
   bool fisheye_;
   bool run_histogram_equilisation_;
