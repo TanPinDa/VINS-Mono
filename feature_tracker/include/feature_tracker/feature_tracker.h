@@ -57,8 +57,6 @@ class FeatureTracker {
                               int n_max_point_to_detect);
   void readIntrinsicParameter(const string &calib_file);
 
-  void showUndistortion(const string &name);
-
   void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
                        const vector<cv::Point2f> &prev_un_pts,
                        vector<cv::Point2f> &pts_velocity_out) const;

@@ -258,45 +258,6 @@ void FeatureTracker::readIntrinsicParameter(const string &calib_file) {
   m_camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file);
 }
 
-void FeatureTracker::showUndistortion(const string &name) {
-  cv::Mat undistortedImg(m_camera->imageHeight() + 600,
-                         m_camera->imageWidth() + 600, CV_8UC1, cv::Scalar(0));
-  vector<Eigen::Vector2d> distortedp, undistortedp;
-  for (size_t i = 0; i < m_camera->imageWidth(); i++)
-    for (size_t j = 0; j < m_camera->imageHeight(); j++) {
-      Eigen::Vector2d a(i, j);
-      Eigen::Vector3d b;
-      m_camera->liftProjective(a, b);
-      distortedp.push_back(a);
-      undistortedp.push_back(Eigen::Vector2d(b.x() / b.z(), b.y() / b.z()));
-      // printf("%f,%f->%f,%f,%f\n)\n", a.x(), a.y(), b.x(), b.y(), b.z());
-    }
-  for (size_t i = 0; i < undistortedp.size(); i++) {
-    cv::Mat pp(3, 1, CV_32FC1);
-    pp.at<float>(0, 0) = undistortedp[i].x() * fx_ + m_camera->imageWidth() / 2;
-    pp.at<float>(1, 0) =
-        undistortedp[i].y() * fy_ + m_camera->imageHeight() / 2;
-    pp.at<float>(2, 0) = 1.0;
-    // cout << trackerData[0].K << endl;
-    // printf("%lf %lf\n", p.at<float>(1, 0), p.at<float>(0, 0));
-    // printf("%lf %lf\n", pp.at<float>(1, 0), pp.at<float>(0, 0));
-    if (pp.at<float>(1, 0) + 300 >= 0 &&
-        pp.at<float>(1, 0) + 300 < m_camera->imageHeight() + 600 &&
-        pp.at<float>(0, 0) + 300 >= 0 &&
-        pp.at<float>(0, 0) + 300 < m_camera->imageWidth() + 600) {
-      undistortedImg.at<uchar>(pp.at<float>(1, 0) + 300,
-                               pp.at<float>(0, 0) + 300) =
-          previous_pre_processed_image_.at<uchar>(distortedp[i].y(),
-                                                  distortedp[i].x());
-    } else {
-      // spdlog::error("({0} {1}) -> ({2} {3})", distortedp[i].y,
-      // distortedp[i].x, pp.at<float>(1, 0), pp.at<float>(0, 0));
-    }
-  }
-  cv::imshow(name, undistortedImg);
-  cv::waitKey(0);
-}
-
 void FeatureTracker::GetPointVelocty(
     double dt, const vector<cv::Point2f> &cur_un_pts,
     const vector<cv::Point2f> &prev_un_pts,
