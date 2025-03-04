@@ -27,7 +27,7 @@ cv::Mat FeatureTrackerObserver::CreateOpticalFlowImage(
     // std::cout << "velocty: " << points_velocity[i].x << ", "
     //           << points_velocity[i].y << std::endl;
     cv::Point2f end =
-        start + (points_velocity[i])*10;  // Add velocity to get end point
+        start + (points_velocity[i])*50;  // Add velocity to get end point
 
     cv::arrowedLine(show_img, start, end, cv::Scalar(0, 255, 0), 1,
                     cv::LINE_AA);

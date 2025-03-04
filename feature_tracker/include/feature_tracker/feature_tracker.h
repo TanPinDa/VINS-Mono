@@ -36,7 +36,9 @@ class FeatureTracker {
  private:
   void RestartTracker(const cv::Mat &pre_processed_img, double current_time);
 
-  cv::Mat setMask(vector<cv::Point2f> &curr_pts);
+  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts,
+                                   vector<int> &track_length,
+                                   vector<bool> &status_out);
 
   void AddPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
                  const camodocal::CameraPtr m_camera,
@@ -53,9 +55,9 @@ class FeatureTracker {
                             const vector<cv::Point2f> &prev_un_pts) const;
   void DetectNewFeaturePoints(vector<cv::Point2f> &current_points,
                               vector<cv::Point2f> &current_undistorted_points,
+                              const vector<int> &feature_track_length,
                               const cv::Mat &pre_processed_img,
                               int n_max_point_to_detect);
-  void readIntrinsicParameter(const string &calib_file);
 
   void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
                        const vector<cv::Point2f> &prev_un_pts,
@@ -66,8 +68,7 @@ class FeatureTracker {
 
   std::string GenerateStateString() const;
 
-  cv::Mat fisheye_mask;
-
+  cv::Mat base_mask_;
   cv::Mat previous_pre_processed_image_;
   double previous_frame_time_;
   vector<cv::Point2f> previous_undistorted_pts_;
@@ -84,6 +85,7 @@ class FeatureTracker {
                                 // instances
 
   cv::Ptr<cv::CLAHE> clahe_;
+
 
   bool fisheye_;
   bool run_histogram_equilisation_;
