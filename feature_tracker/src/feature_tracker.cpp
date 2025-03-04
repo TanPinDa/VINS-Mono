@@ -1,5 +1,6 @@
 #include "feature_tracker/feature_tracker.h"
 
+#include <numeric>
 #include <opencv2/opencv.hpp>
 #include <sstream>
 
@@ -21,6 +22,14 @@ void reduceVector(vector<T> &v, const vector<uchar> status) {
   v.resize(j);
 }
 
+template <typename T>
+void reduceVector(vector<T> &v, const vector<bool> status) {
+  int j = 0;
+  for (size_t i = 0; i < int(v.size()); i++)
+    if (status[i]) v[j++] = v[i];
+  v.resize(j);
+}
+
 FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
                                bool run_histogram_equilisation,
                                uint max_feature_count_per_image,
@@ -28,8 +37,7 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
                                double fundemental_matrix_threshold, double fx,
                                double fy, double feature_pruning_frequency,
                                double max_time_difference)
-    : fisheye_(fisheye),
-      run_histogram_equilisation_(run_histogram_equilisation),
+    : run_histogram_equilisation_(run_histogram_equilisation),
       max_feature_count_per_image_(max_feature_count_per_image),
       min_distance_between_features_(min_distance_between_features),
       fundemental_matrix_ransac_threshold_(fundemental_matrix_threshold),
@@ -39,11 +47,18 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
       max_time_difference_(max_time_difference),
       previous_frame_time_(0.0),
       prev_prune_time_(0.0) {
-  readIntrinsicParameter(camera_config_file);
+  m_camera =
+      CameraFactory::instance()->generateCameraFromYamlFile(camera_config_file);
   feature_pruning_period_ = 1.0 / feature_pruning_frequency;
   if (run_histogram_equilisation) {
     clahe_ = cv::createCLAHE(3.0, cv::Size(8, 8));
   }
+
+  if (fisheye) std::cout << "!!!FISH EYE NOT WORKING";
+  // base_mask_ = fisheye_mask.clone();
+  else
+    base_mask_ = cv::Mat(m_camera->imageHeight(), m_camera->imageWidth(),
+                         CV_8UC1, cv::Scalar(255));
 }
 
 void FeatureTracker::RegisterEventObserver(
@@ -107,9 +122,29 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_,
                            previous_undistorted_pts_, feature_ids_,
                            feature_track_lengh_);
-    DetectNewFeaturePoints(
-        current_points, cur_un_pts, pre_processed_img,
-        max_feature_count_per_image_ - current_points.size());
+    vector<bool> status;
+    cv::Mat mask = CreateMask(current_points, feature_track_lengh_, status);
+
+    reduceVector(previous_points_, status);
+    reduceVector(previous_undistorted_pts_, status);
+    reduceVector(current_points, status);
+    reduceVector(cur_un_pts, status);
+    reduceVector(feature_ids_, status);
+    reduceVector(feature_track_lengh_, status);
+    int n_max_point_to_detect =
+        max_feature_count_per_image_ - current_points.size();
+    if (n_max_point_to_detect > 0) {
+      vector<cv::Point2f> newly_generated_points;
+      cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
+                              n_max_point_to_detect, 0.01,
+                              min_distance_between_features_, mask);
+      for (const cv::Point2f &p : newly_generated_points) {
+        current_points.push_back(p);
+        cur_un_pts.push_back(UndistortPoint(p, m_camera));
+        feature_ids_.push_back(feature_counter_++);
+        feature_track_lengh_.push_back(1);
+      }
+    }
 
     vector<cv::Point2f> pts_velocity;
     GetPointVelocty(current_image_time_s - previous_frame_time_, cur_un_pts,
@@ -138,8 +173,17 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   previous_undistorted_pts_.clear();
   feature_ids_.clear();
   feature_track_lengh_.clear();
-  DetectNewFeaturePoints(previous_points_, previous_undistorted_pts_,
-                         pre_processed_img, max_feature_count_per_image_);
+
+  vector<cv::Point2f> newly_generated_points;
+  cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
+                          max_feature_count_per_image_, 0.01,
+                          min_distance_between_features_, base_mask_);
+  for (const cv::Point2f &p : newly_generated_points) {
+    previous_points_.push_back(p);
+    previous_undistorted_pts_.push_back(UndistortPoint(p, m_camera));
+    feature_ids_.push_back(feature_counter_++);
+    feature_track_lengh_.push_back(1);
+  }
 
   previous_frame_time_ = current_time;
   prev_prune_time_ = current_time;
@@ -147,68 +191,35 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   return;
 }
 
-cv::Mat FeatureTracker::setMask(vector<cv::Point2f> &curr_pts) {
-  cv::Mat mask;
-  if (fisheye_)
-    mask = fisheye_mask.clone();
-  else
-    mask = cv::Mat(m_camera->imageHeight(), m_camera->imageWidth(), CV_8UC1,
-                   cv::Scalar(255));
+cv::Mat FeatureTracker::CreateMask(vector<cv::Point2f> &curr_pts,
+                                   vector<int> &track_length,
+                                   vector<bool> &status_out) {
+  cv::Mat mask = base_mask_.clone();
 
-  // prefer to keep features that are tracked for long time
-  vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
+  std::vector<size_t> indices(track_length.size());
+  std::iota(indices.begin(), indices.end(), 0);
+  std::sort(indices.begin(), indices.end(),
+            [track_length](int A, int B) -> bool {
+              return track_length[A] < track_length[B];
+            });
 
-  for (size_t i = 0; i < curr_pts.size(); i++)
-    cnt_pts_id.push_back(make_pair(feature_track_lengh_[i],
-                                   make_pair(curr_pts[i], feature_ids_[i])));
+  status_out.assign(curr_pts.size(), false);
 
-  sort(cnt_pts_id.begin(), cnt_pts_id.end(),
-       [](const pair<int, pair<cv::Point2f, int>> &a,
-          const pair<int, pair<cv::Point2f, int>> &b) {
-         return a.first > b.first;
-       });
-
-  curr_pts.clear();
-  feature_ids_.clear();
-  feature_track_lengh_.clear();
-
-  for (auto &it : cnt_pts_id) {
-    if (mask.at<uchar>(it.second.first) == 255) {
-      curr_pts.push_back(it.second.first);
-      feature_ids_.push_back(it.second.second);
-      feature_track_lengh_.push_back(it.first);
-      cv::circle(mask, it.second.first, min_distance_between_features_, 0, -1);
+  for (size_t i : indices) {
+    if (mask.at<uchar>(curr_pts[i]) == 255) {
+      cv::circle(mask, curr_pts[i], min_distance_between_features_, 0, -1);
+      status_out[i] = true;
     }
   }
-  return mask;
-}
 
-void FeatureTracker::AddPoints(
-    vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
-    const camodocal::CameraPtr m_camera,
-    const vector<cv::Point2f> &newly_generated_points) {
-  for (const cv::Point2f &p : newly_generated_points) {
-    curr_pts.push_back(p);
-    cur_un_pts.push_back(UndistortPoint(p, m_camera));
-    feature_ids_.push_back(feature_counter_++);
-    feature_track_lengh_.push_back(1);
-  }
+  return mask;
 }
 
 void FeatureTracker::DetectNewFeaturePoints(
     vector<cv::Point2f> &current_points,
     vector<cv::Point2f> &current_undistorted_points,
-    const cv::Mat &pre_processed_img, int n_max_point_to_detect) {
-  cv::Mat mask = setMask(current_points);
-  if (n_max_point_to_detect > 0) {
-    vector<cv::Point2f> newly_generated_points;
-    cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
-                            n_max_point_to_detect, 0.01,
-                            min_distance_between_features_, mask);
-    AddPoints(current_points, current_undistorted_points, m_camera,
-              newly_generated_points);
-  }
-}
+    const vector<int> &feature_track_length, const cv::Mat &pre_processed_img,
+    int n_max_point_to_detect) {}
 
 vector<uchar> FeatureTracker::rejectWithF(
     const vector<cv::Point2f> &cur_un_pts,
@@ -252,10 +263,6 @@ void FeatureTracker::PrunePointsUsingRansac(
   reduceVector(previous_undistorted_points, status);
   reduceVector(ids, status);
   reduceVector(track_counts, status);
-}
-void FeatureTracker::readIntrinsicParameter(const string &calib_file) {
-  spdlog::info("reading paramerter of camera {}", calib_file.c_str());
-  m_camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file);
 }
 
 void FeatureTracker::GetPointVelocty(
