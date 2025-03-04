@@ -116,34 +116,33 @@ void FeatureTracker::ProcessNewFrame(cv::Mat new_frame,
     for (size_t i = 0; i < current_points.size(); i++) {
       cur_un_pts.push_back(UndistortPoint(current_points[i], m_camera));
     }
+
     for (int &n : feature_track_lengh_) n++;
   }  // Prune and detect new points
   if (current_image_time_s > prev_prune_time_ + feature_pruning_period_) {
-    PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_,
-                           previous_undistorted_pts_, feature_ids_,
-                           feature_track_lengh_);
+    if (current_points.size() > 7) {
+      PrunePointsUsingRansac(current_points, cur_un_pts, previous_points_,
+                             previous_undistorted_pts_, feature_ids_,
+                             feature_track_lengh_);
+    } else {
+      std::cout << "!!!Cannot prune because too few points!!! " << std::endl;
+    }
+
     vector<bool> status;
     cv::Mat mask = CreateMask(current_points, feature_track_lengh_, status);
-
     reduceVector(previous_points_, status);
     reduceVector(previous_undistorted_pts_, status);
     reduceVector(current_points, status);
     reduceVector(cur_un_pts, status);
     reduceVector(feature_ids_, status);
     reduceVector(feature_track_lengh_, status);
+
     int n_max_point_to_detect =
         max_feature_count_per_image_ - current_points.size();
     if (n_max_point_to_detect > 0) {
-      vector<cv::Point2f> newly_generated_points;
-      cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
-                              n_max_point_to_detect, 0.01,
-                              min_distance_between_features_, mask);
-      for (const cv::Point2f &p : newly_generated_points) {
-        current_points.push_back(p);
-        cur_un_pts.push_back(UndistortPoint(p, m_camera));
-        feature_ids_.push_back(feature_counter_++);
-        feature_track_lengh_.push_back(1);
-      }
+      AddPoints(pre_processed_img, mask, n_max_point_to_detect,
+                min_distance_between_features_, m_camera, current_points,
+                cur_un_pts, feature_track_lengh_, feature_ids_);
     }
 
     vector<cv::Point2f> pts_velocity;
@@ -175,15 +174,9 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   feature_track_lengh_.clear();
 
   vector<cv::Point2f> newly_generated_points;
-  cv::goodFeaturesToTrack(pre_processed_img, newly_generated_points,
-                          max_feature_count_per_image_, 0.01,
-                          min_distance_between_features_, base_mask_);
-  for (const cv::Point2f &p : newly_generated_points) {
-    previous_points_.push_back(p);
-    previous_undistorted_pts_.push_back(UndistortPoint(p, m_camera));
-    feature_ids_.push_back(feature_counter_++);
-    feature_track_lengh_.push_back(1);
-  }
+  AddPoints(pre_processed_img, base_mask_, max_feature_count_per_image_,
+            min_distance_between_features_, m_camera, previous_points_,
+            previous_undistorted_pts_, feature_track_lengh_, feature_ids_);
 
   previous_frame_time_ = current_time;
   prev_prune_time_ = current_time;
@@ -282,6 +275,22 @@ void FeatureTracker::GetPointVelocty(
   }
 }
 
+void FeatureTracker::AddPoints(
+    const cv::Mat image, const cv::Mat mask, const int max_number_new_of_points,
+    const int min_distance_between_points, const camodocal::CameraPtr m_camera,
+    vector<cv::Point2f> &points, vector<cv::Point2f> &undistorted_points,
+    vector<int> &track_length, vector<int> &feature_ids) {
+  vector<cv::Point2f> newly_generated_points;
+  cv::goodFeaturesToTrack(image, newly_generated_points,
+                          max_number_new_of_points, 0.01,
+                          min_distance_between_points, mask);
+  for (const cv::Point2f &p : newly_generated_points) {
+    points.push_back(p);
+    undistorted_points.push_back(UndistortPoint(p, m_camera));
+    feature_ids.push_back(feature_counter_++);
+    track_length.push_back(1);
+  }
+}
 cv::Point2f FeatureTracker::UndistortPoint(
     const cv::Point2f point, const camodocal::CameraPtr camera) const {
   Eigen::Vector2d a(point.x, point.y);

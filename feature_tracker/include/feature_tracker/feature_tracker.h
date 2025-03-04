@@ -36,13 +36,18 @@ class FeatureTracker {
  private:
   void RestartTracker(const cv::Mat &pre_processed_img, double current_time);
 
-  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts,
-                                   vector<int> &track_length,
-                                   vector<bool> &status_out);
+  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts, vector<int> &track_length,
+                     vector<bool> &status_out);
 
-  void AddPoints(vector<cv::Point2f> &curr_pts, vector<cv::Point2f> &cur_un_pts,
+  void AddPoints(const cv::Mat image, const cv::Mat mask,
+                 const int max_number_new_of_points,
+                 const int min_distance_between_points,
                  const camodocal::CameraPtr m_camera,
-                 const vector<cv::Point2f> &newly_generated_points);
+                 vector<cv::Point2f> &points,
+                 vector<cv::Point2f> &undistorted_points,
+                 vector<int> &track_length, vector<int> &feature_ids
+
+  );
 
   void PrunePointsUsingRansac(vector<cv::Point2f> &curr_points,
                               vector<cv::Point2f> &curr_un_points,
@@ -85,7 +90,6 @@ class FeatureTracker {
                                 // instances
 
   cv::Ptr<cv::CLAHE> clahe_;
-
 
   bool fisheye_;
   bool run_histogram_equilisation_;
