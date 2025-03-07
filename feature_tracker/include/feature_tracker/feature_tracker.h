@@ -16,7 +16,6 @@
 #include "feature_tracker/parameters.h"
 #include "feature_tracker/tic_toc.h"
 
-using namespace std;
 using namespace camodocal;
 using namespace Eigen;
 
@@ -40,26 +39,28 @@ class FeatureTracker {
                  const int max_number_new_of_points,
                  const int min_distance_between_points,
                  const camodocal::CameraPtr m_camera,
-                 vector<cv::Point2f> &points,
-                 vector<cv::Point2f> &undistorted_points,
-                 vector<int> &track_length, vector<int> &feature_ids);
+                 std::vector<cv::Point2f> &points,
+                 std::vector<cv::Point2f> &undistorted_points,
+                 std::vector<int> &track_length, std::vector<int> &feature_ids);
 
-  void PrunePoints(vector<cv::Point2f> &curr_points,
-                   vector<cv::Point2f> &curr_un_points,
-                   vector<cv::Point2f> &prev_points,
-                   vector<cv::Point2f> &prev_un_points, vector<int> &ids,
-                   vector<int> &track_counts, const vector<uchar> &status);
+  void PrunePoints(std::vector<cv::Point2f> &curr_points,
+                   std::vector<cv::Point2f> &curr_un_points,
+                   std::vector<cv::Point2f> &prev_points,
+                   std::vector<cv::Point2f> &prev_un_points,
+                   std::vector<int> &ids, std::vector<int> &track_counts,
+                   const std::vector<uchar> &status);
 
-  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts, vector<int> &track_length,
-                     vector<uchar> &status_out);
+  cv::Mat CreateMask(std::vector<cv::Point2f> &curr_pts,
+                     std::vector<int> &track_length,
+                     std::vector<uchar> &status_out);
 
-  void RejectUsingRansac(const vector<cv::Point2f> &cur_un_pts,
-                         const vector<cv::Point2f> &prev_un_pts,
-                         vector<uchar> &status_out) const;
+  void RejectUsingRansac(const std::vector<cv::Point2f> &cur_un_pts,
+                         const std::vector<cv::Point2f> &prev_un_pts,
+                         std::vector<uchar> &status_out) const;
 
-  void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
-                       const vector<cv::Point2f> &prev_un_pts,
-                       vector<cv::Point2f> &pts_velocity_out) const;
+  void GetPointVelocty(double dt, const std::vector<cv::Point2f> &cur_un_pts,
+                       const std::vector<cv::Point2f> &prev_un_pts,
+                       std::vector<cv::Point2f> &pts_velocity_out) const;
 
   cv::Point2f UndistortPoint(const cv::Point2f point,
                              const camodocal::CameraPtr camera) const;
@@ -70,10 +71,10 @@ class FeatureTracker {
   cv::Mat previous_pre_processed_image_;
   double previous_frame_time_;
 
-  vector<cv::Point2f> previous_undistorted_pts_;
-  vector<cv::Point2f> previous_points_;
-  vector<int> feature_ids_;
-  vector<int> feature_track_lengh_;
+  std::vector<cv::Point2f> previous_undistorted_pts_;
+  std::vector<cv::Point2f> previous_points_;
+  std::vector<int> feature_ids_;
+  std::vector<int> feature_track_lengh_;
   double prev_prune_time_;
 
   double fx_;

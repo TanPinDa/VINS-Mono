@@ -15,15 +15,7 @@ bool inBorder(const cv::Point2f &pt, const uint col, const uint row,
 }
 
 template <typename T>
-void reduceVector(vector<T> &v, const vector<uchar> status) {
-  int j = 0;
-  for (size_t i = 0; i < int(v.size()); i++)
-    if (status[i]) v[j++] = v[i];
-  v.resize(j);
-}
-
-template <typename T>
-void reduceVector(vector<T> &v, const vector<bool> status) {
+void reduceVector(std::vector<T> &v, const std::vector<uchar> status) {
   int j = 0;
   for (size_t i = 0; i < int(v.size()); i++)
     if (status[i]) v[j++] = v[i];
@@ -57,8 +49,8 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
   if (fisheye) std::cout << "!!!FISH EYE NOT WORKING";
   // base_mask_ = fisheye_mask.clone();
   else
-    base_mask_ = cv::Mat(camera_model_->imageHeight(), camera_model_->imageWidth(),
-                         CV_8UC1, cv::Scalar(255));
+    base_mask_ = cv::Mat(camera_model_->imageHeight(),
+                         camera_model_->imageWidth(), CV_8UC1, cv::Scalar(255));
 }
 
 void FeatureTracker::RegisterEventObserver(
@@ -93,12 +85,12 @@ void FeatureTracker::ProcessNewFrame(const cv::Mat &new_frame,
     return;
   }
   // Find new feature points by optical flow
-  vector<cv::Point2f> current_points;
-  vector<cv::Point2f> cur_un_pts;
+  std::vector<cv::Point2f> current_points;
+  std::vector<cv::Point2f> cur_un_pts;
 
   if (previous_points_.size() > 0) {
-    vector<uchar> status;
-    vector<float> err;
+    std::vector<uchar> status;
+    std::vector<float> err;
     cv::calcOpticalFlowPyrLK(previous_pre_processed_image_, pre_processed_img,
                              previous_points_, current_points, status, err,
                              cv::Size(21, 21), 3);
@@ -122,7 +114,7 @@ void FeatureTracker::ProcessNewFrame(const cv::Mat &new_frame,
   // Prune and detect new points
   if (current_image_time_s > prev_prune_time_ + feature_pruning_period_) {
     if (current_points.size() > 8) {
-      vector<uchar> ransac_status;
+      std::vector<uchar> ransac_status;
 
       RejectUsingRansac(cur_un_pts, previous_undistorted_pts_, ransac_status);
       PrunePoints(current_points, cur_un_pts, previous_points_,
@@ -130,7 +122,7 @@ void FeatureTracker::ProcessNewFrame(const cv::Mat &new_frame,
                   ransac_status);
     }
 
-    vector<uchar> status;
+    std::vector<uchar> status;
     cv::Mat mask = CreateMask(current_points, feature_track_lengh_, status);
     PrunePoints(current_points, cur_un_pts, previous_points_,
                 previous_undistorted_pts_, feature_track_lengh_, feature_ids_,
@@ -144,7 +136,7 @@ void FeatureTracker::ProcessNewFrame(const cv::Mat &new_frame,
                 cur_un_pts, feature_track_lengh_, feature_ids_);
     }
 
-    vector<cv::Point2f> pts_velocity;
+    std::vector<cv::Point2f> pts_velocity;
     GetPointVelocty(current_image_time_s - previous_frame_time_, cur_un_pts,
                     previous_undistorted_pts_, pts_velocity);
 
@@ -172,7 +164,7 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   feature_ids_.clear();
   feature_track_lengh_.clear();
 
-  vector<cv::Point2f> newly_generated_points;
+  std::vector<cv::Point2f> newly_generated_points;
   AddPoints(pre_processed_img, base_mask_, max_feature_count_per_image_,
             min_distance_between_features_, camera_model_, previous_points_,
             previous_undistorted_pts_, feature_track_lengh_, feature_ids_);
@@ -186,9 +178,9 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
 void FeatureTracker::AddPoints(
     const cv::Mat image, const cv::Mat mask, const int max_number_new_of_points,
     const int min_distance_between_points, const camodocal::CameraPtr m_camera,
-    vector<cv::Point2f> &points, vector<cv::Point2f> &undistorted_points,
-    vector<int> &track_length, vector<int> &feature_ids) {
-  vector<cv::Point2f> newly_generated_points;
+    std::vector<cv::Point2f> &points, std::vector<cv::Point2f> &undistorted_points,
+    std::vector<int> &track_length, std::vector<int> &feature_ids) {
+  std::vector<cv::Point2f> newly_generated_points;
   cv::goodFeaturesToTrack(image, newly_generated_points,
                           max_number_new_of_points, 0.01,
                           min_distance_between_points, mask);
@@ -200,12 +192,12 @@ void FeatureTracker::AddPoints(
   }
 }
 
-void FeatureTracker::PrunePoints(vector<cv::Point2f> &curr_points,
-                                 vector<cv::Point2f> &curr_un_points,
-                                 vector<cv::Point2f> &prev_points,
-                                 vector<cv::Point2f> &prev_un_points,
-                                 vector<int> &ids, vector<int> &track_counts,
-                                 const vector<uchar> &status) {
+void FeatureTracker::PrunePoints(std::vector<cv::Point2f> &curr_points,
+                                 std::vector<cv::Point2f> &curr_un_points,
+                                 std::vector<cv::Point2f> &prev_points,
+                                 std::vector<cv::Point2f> &prev_un_points,
+                                 std::vector<int> &ids, std::vector<int> &track_counts,
+                                 const std::vector<uchar> &status) {
   reduceVector(curr_points, status);
   reduceVector(curr_un_points, status);
   reduceVector(prev_points, status);
@@ -214,9 +206,9 @@ void FeatureTracker::PrunePoints(vector<cv::Point2f> &curr_points,
   reduceVector(track_counts, status);
 }
 
-cv::Mat FeatureTracker::CreateMask(vector<cv::Point2f> &curr_pts,
-                                   vector<int> &track_length,
-                                   vector<uchar> &status_out) {
+cv::Mat FeatureTracker::CreateMask(std::vector<cv::Point2f> &curr_pts,
+                                   std::vector<int> &track_length,
+                                   std::vector<uchar> &status_out) {
   cv::Mat mask = base_mask_.clone();
 
   std::vector<size_t> indices(track_length.size());
@@ -239,26 +231,28 @@ cv::Mat FeatureTracker::CreateMask(vector<cv::Point2f> &curr_pts,
 }
 
 void FeatureTracker::RejectUsingRansac(
-    const vector<cv::Point2f> &current_undistorted_points,
-    const vector<cv::Point2f> &previous_undistorted_points,
-    vector<uchar> &status_out) const {
+    const std::vector<cv::Point2f> &current_undistorted_points,
+    const std::vector<cv::Point2f> &previous_undistorted_points,
+    std::vector<uchar> &status_out) const {
   status_out.clear();
   size_t n_points = current_undistorted_points.size();
 
   if (n_points > 7) {
-    vector<cv::Point2f> curr_scaled_undistorted_pts(n_points),
+    std::vector<cv::Point2f> curr_scaled_undistorted_pts(n_points),
         prev_scaled_undistorted_pts(n_points);
 
     for (size_t i = 0; i < n_points; i++) {
-      curr_scaled_undistorted_pts[i] = cv::Point2f(
-          fx_ * current_undistorted_points[i].x + camera_model_->imageWidth() / 2.0,
-          fy_ * current_undistorted_points[i].y +
-              camera_model_->imageHeight() / 2.0);
+      curr_scaled_undistorted_pts[i] =
+          cv::Point2f(fx_ * current_undistorted_points[i].x +
+                          camera_model_->imageWidth() / 2.0,
+                      fy_ * current_undistorted_points[i].y +
+                          camera_model_->imageHeight() / 2.0);
 
-      prev_scaled_undistorted_pts[i] = cv::Point2f(
-          fx_ * previous_undistorted_points[i].x + camera_model_->imageWidth() / 2.0,
-          fy_ * previous_undistorted_points[i].y +
-              camera_model_->imageHeight() / 2.0);
+      prev_scaled_undistorted_pts[i] =
+          cv::Point2f(fx_ * previous_undistorted_points[i].x +
+                          camera_model_->imageWidth() / 2.0,
+                      fy_ * previous_undistorted_points[i].y +
+                          camera_model_->imageHeight() / 2.0);
     }
 
     cv::findFundamentalMat(
@@ -268,9 +262,9 @@ void FeatureTracker::RejectUsingRansac(
 }
 
 void FeatureTracker::GetPointVelocty(
-    double dt, const vector<cv::Point2f> &cur_un_pts,
-    const vector<cv::Point2f> &prev_un_pts,
-    vector<cv::Point2f> &pts_velocity_out) const {
+    double dt, const std::vector<cv::Point2f> &cur_un_pts,
+    const std::vector<cv::Point2f> &prev_un_pts,
+    std::vector<cv::Point2f> &pts_velocity_out) const {
   pts_velocity_out.clear();
 
   for (size_t i = 0; i < cur_un_pts.size(); i++) {
