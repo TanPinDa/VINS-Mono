@@ -31,13 +31,10 @@ class FeatureTracker {
                  double max_time_difference);
   void RegisterEventObserver(
       std::shared_ptr<FeatureTrackerObserver> event_observer);
-  void ProcessNewFrame(cv::Mat img, double time_s);
+  void ProcessNewFrame(const cv::Mat &img, const double time_s);
 
  private:
   void RestartTracker(const cv::Mat &pre_processed_img, double current_time);
-
-  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts, vector<int> &track_length,
-                     vector<bool> &status_out);
 
   void AddPoints(const cv::Mat image, const cv::Mat mask,
                  const int max_number_new_of_points,
@@ -45,24 +42,20 @@ class FeatureTracker {
                  const camodocal::CameraPtr m_camera,
                  vector<cv::Point2f> &points,
                  vector<cv::Point2f> &undistorted_points,
-                 vector<int> &track_length, vector<int> &feature_ids
+                 vector<int> &track_length, vector<int> &feature_ids);
 
-  );
+  void PrunePoints(vector<cv::Point2f> &curr_points,
+                   vector<cv::Point2f> &curr_un_points,
+                   vector<cv::Point2f> &prev_points,
+                   vector<cv::Point2f> &prev_un_points, vector<int> &ids,
+                   vector<int> &track_counts, const vector<uchar> &status);
 
-  void PrunePointsUsingRansac(vector<cv::Point2f> &curr_points,
-                              vector<cv::Point2f> &curr_un_points,
-                              vector<cv::Point2f> &prev_points,
-                              vector<cv::Point2f> &prev_un_points,
-                              vector<int> &ids,
-                              vector<int> &track_counts) const;
+  cv::Mat CreateMask(vector<cv::Point2f> &curr_pts, vector<int> &track_length,
+                     vector<uchar> &status_out);
 
-  vector<uchar> rejectWithF(const vector<cv::Point2f> &cur_un_pts,
-                            const vector<cv::Point2f> &prev_un_pts) const;
-  void DetectNewFeaturePoints(vector<cv::Point2f> &current_points,
-                              vector<cv::Point2f> &current_undistorted_points,
-                              const vector<int> &feature_track_length,
-                              const cv::Mat &pre_processed_img,
-                              int n_max_point_to_detect);
+  void RejectUsingRansac(const vector<cv::Point2f> &cur_un_pts,
+                         const vector<cv::Point2f> &prev_un_pts,
+                         vector<uchar> &status_out) const;
 
   void GetPointVelocty(double dt, const vector<cv::Point2f> &cur_un_pts,
                        const vector<cv::Point2f> &prev_un_pts,
@@ -76,6 +69,7 @@ class FeatureTracker {
   cv::Mat base_mask_;
   cv::Mat previous_pre_processed_image_;
   double previous_frame_time_;
+
   vector<cv::Point2f> previous_undistorted_pts_;
   vector<cv::Point2f> previous_points_;
   vector<int> feature_ids_;
@@ -84,7 +78,7 @@ class FeatureTracker {
 
   double fx_;
   double fy_;
-  camodocal::CameraPtr m_camera;
+  camodocal::CameraPtr camera_model_;
 
   static int feature_counter_;  // Static to ensure unique id between different
                                 // instances
