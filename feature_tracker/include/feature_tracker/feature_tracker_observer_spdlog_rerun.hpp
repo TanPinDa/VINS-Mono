@@ -1,12 +1,15 @@
 #ifndef FEATURE_TRACKER_OBSERVER_SPDLOG_RERUN_HPP
 #define FEATURE_TRACKER_OBSERVER_SPDLOG_RERUN_HPP
+#include <rerun.hpp>
 #include "feature_tracker/feature_tracker_observer.hpp"
 class FeatureTrackerObserverSPDRerun : public FeatureTrackerObserver {
  public:
   //   FeatureTrackerObserverSPDRerun() = default;
   ~FeatureTrackerObserverSPDRerun();
+//   const auto rec = rerun::RecordingStream("rerun_example_image_formats");
 
  private:
+  std::unique_ptr<rerun::RecordingStream> recorder_;
   void OnRegistered() final;
 
   void OnRestart() final;
