@@ -10,11 +10,11 @@ find_package(OpenCV REQUIRED)
 find_package(feature_tracker REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(spdlog REQUIRED)
-
+find_package(yaml-cpp REQUIRED)
 
 # Define your library target
 add_library(feature_tracker_rerun STATIC src/feature_tracker_observer_spdlog_rerun.cpp)
-target_link_libraries(feature_tracker_rerun PRIVATE ${OpenCV_LIBS} spdlog::spdlog_header_only rerun_sdk feature_tracker::feature_tracker camodocal::camodocal)
+target_link_libraries(feature_tracker_rerun PRIVATE ${OpenCV_LIBS} spdlog::spdlog_header_only rerun_sdk feature_tracker::feature_tracker camodocal::camodocal yaml-cpp)
 
 # Set include directories
 target_include_directories(feature_tracker_rerun
