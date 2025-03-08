@@ -5,17 +5,16 @@ set(CMAKE_CXX_FLAGS "-std=c++17")
 find_package(OpenCV REQUIRED)
 find_package(camodocal REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(spdlog REQUIRED)
 
 # Define your library target
-add_library(feature_tracker STATIC src/feature_tracker.cpp)
-target_link_libraries(feature_tracker PRIVATE ${OpenCV_LIBS} ${CERES_LIBRARIES} spdlog::spdlog_header_only camodocal::camodocal )
+add_library(feature_tracker STATIC src/feature_tracker.cpp src/feature_tracker_observer.cpp)
+target_link_libraries(feature_tracker PRIVATE ${OpenCV_LIBS} ${CERES_LIBRARIES} camodocal::camodocal)
 
 # Set include directories
 target_include_directories(feature_tracker
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 # Install the library
