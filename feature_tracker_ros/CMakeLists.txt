@@ -25,7 +25,7 @@ include_directories(
 catkin_package()
 
 add_executable(feature_tracker_node
-    src/feature_tracker_node.cpp src/ros_parameter_reader.cpp
+    src/feature_tracker_node.cpp 
     )
 
 target_link_libraries(feature_tracker_node ${catkin_LIBRARIES} ${OpenCV_LIBS} feature_tracker::feature_tracker)
