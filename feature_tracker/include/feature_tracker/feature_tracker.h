@@ -1,23 +1,9 @@
-#pragma once
+#ifndef FEATURE_TRACKER_H
+#define FEATURE_TRACKER_H
 
-#include <execinfo.h>
-
-#include <csignal>
-#include <cstdio>
-#include <eigen3/Eigen/Dense>
-#include <iostream>
 #include <opencv2/opencv.hpp>
-#include <queue>
-
 #include "camodocal/camera_models/CameraFactory.h"
-#include "camodocal/camera_models/CataCamera.h"
-#include "camodocal/camera_models/PinholeCamera.h"
 #include "feature_tracker/feature_tracker_observer.hpp"
-#include "feature_tracker/parameters.h"
-#include "feature_tracker/tic_toc.h"
-
-using namespace camodocal;
-using namespace Eigen;
 
 class FeatureTracker {
  public:
@@ -28,8 +14,10 @@ class FeatureTracker {
                  double fundemental_matrix_ransac_threshold, double fx,
                  double fy, double feature_pruning_frequency,
                  double max_time_difference);
+
   void RegisterEventObserver(
       std::shared_ptr<FeatureTrackerObserver> event_observer);
+      
   void ProcessNewFrame(const cv::Mat &img, const double time_s);
 
  private:
@@ -97,3 +85,6 @@ class FeatureTracker {
   double feature_pruning_period_;
   std::shared_ptr<FeatureTrackerObserver> event_observer_;
 };
+
+
+#endif /* FEATURE_TRACKER_H */

@@ -40,7 +40,8 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
       previous_frame_time_(0.0),
       prev_prune_time_(0.0) {
   camera_model_ =
-      CameraFactory::instance()->generateCameraFromYamlFile(camera_config_file);
+      camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
+          camera_config_file);
   feature_pruning_period_ = 1.0 / feature_pruning_frequency;
   if (run_histogram_equilisation) {
     clahe_ = cv::createCLAHE(3.0, cv::Size(8, 8));
@@ -51,6 +52,7 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
   else
     base_mask_ = cv::Mat(camera_model_->imageHeight(),
                          camera_model_->imageWidth(), CV_8UC1, cv::Scalar(255));
+
 }
 
 void FeatureTracker::RegisterEventObserver(
@@ -175,11 +177,14 @@ void FeatureTracker::RestartTracker(const cv::Mat &pre_processed_img,
   return;
 }
 
-void FeatureTracker::AddPoints(
-    const cv::Mat image, const cv::Mat mask, const int max_number_new_of_points,
-    const int min_distance_between_points, const camodocal::CameraPtr m_camera,
-    std::vector<cv::Point2f> &points, std::vector<cv::Point2f> &undistorted_points,
-    std::vector<int> &track_length, std::vector<int> &feature_ids) {
+void FeatureTracker::AddPoints(const cv::Mat image, const cv::Mat mask,
+                               const int max_number_new_of_points,
+                               const int min_distance_between_points,
+                               const camodocal::CameraPtr m_camera,
+                               std::vector<cv::Point2f> &points,
+                               std::vector<cv::Point2f> &undistorted_points,
+                               std::vector<int> &track_length,
+                               std::vector<int> &feature_ids) {
   std::vector<cv::Point2f> newly_generated_points;
   cv::goodFeaturesToTrack(image, newly_generated_points,
                           max_number_new_of_points, 0.01,
@@ -196,7 +201,8 @@ void FeatureTracker::PrunePoints(std::vector<cv::Point2f> &curr_points,
                                  std::vector<cv::Point2f> &curr_un_points,
                                  std::vector<cv::Point2f> &prev_points,
                                  std::vector<cv::Point2f> &prev_un_points,
-                                 std::vector<int> &ids, std::vector<int> &track_counts,
+                                 std::vector<int> &ids,
+                                 std::vector<int> &track_counts,
                                  const std::vector<uchar> &status) {
   reduceVector(curr_points, status);
   reduceVector(curr_un_points, status);
