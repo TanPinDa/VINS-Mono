@@ -1,5 +1,5 @@
-#ifndef FEATURE_TRACKER_H
-#define FEATURE_TRACKER_H
+#ifndef FEATURE_TRACKER_HPP
+#define FEATURE_TRACKER_HPP
 
 #include <opencv2/opencv.hpp>
 #include "camodocal/camera_models/CameraFactory.h"
@@ -87,4 +87,4 @@ class FeatureTracker {
 };
 
 
-#endif /* FEATURE_TRACKER_H */
+#endif /* FEATURE_TRACKER_HPP */
