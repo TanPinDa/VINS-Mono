@@ -12,8 +12,8 @@
 int main(int argc, char** argv) {
   FeatureTracker feat(
       "/home/rosdev/workspace/ros_ws/src/VINS-Mono/config/euroc/"
-      "euroc_config.yaml",
-      false, true, 150, 30, 1.0, 460, 460, 10,1.0);
+      "camera_config.yaml",
+      false, true, 150, 30, 1.0, 460, 460, 10, 1.0);
   std::shared_ptr<FeatureTrackerObserverSPDRerun> observer =
       std::make_shared<FeatureTrackerObserverSPDRerun>();
 
@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
   std::string line;
   double time_covnersion = pow(10.0, 9);
   // Read the CSV file line by line
+
   while (std::getline(tsFile, line)) {
     std::stringstream ss(line);
     double timestamp;
