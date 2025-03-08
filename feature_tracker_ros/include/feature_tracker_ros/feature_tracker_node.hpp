@@ -7,7 +7,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Time.h>
 
-#include "feature_tracker/feature_tracker.h"
+#include "feature_tracker/feature_tracker.hpp"
 #include "feature_tracker/feature_tracker_observer.hpp"
 
 class FeatureTrackerNode : public FeatureTrackerObserver {
@@ -23,13 +23,17 @@ class FeatureTrackerNode : public FeatureTrackerObserver {
                                       double previous_image_time_s) final;
   void OnImageTimeMovingBackwards(double current_image_time_s,
                                   double previous_image_time_s) final;
-  void OnProcessedImage(cv::Mat new_frame, double current_image_time_s,
+  void OnProcessedImage(const cv::Mat& new_frame, double current_image_time_s,
                         std::vector<cv::Point2f> features,
                         std::vector<cv::Point2f> undistorted_features,
 
                         std::vector<int> ids, std::vector<int> track_count,
                         std::vector<cv::Point2f> points_velocity) final;
 
+  void OnImageRecieved(const cv::Mat& new_frame,
+                       double current_image_time_s) final;
+  void OnHistogramEqualisation(const cv::Mat& new_frame,
+                               double current_image_time_s) final;
   bool ReadParameters(std::string& configFilePath, int& maxFeatureCount,
                       int& minFeatureDistance, int& pruningFrequency,
                       double& ransacThreshold,

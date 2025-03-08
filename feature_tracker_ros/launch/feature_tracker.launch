@@ -1,7 +1,14 @@
 <launch>
-    <arg name="camera_config_path" default = "$(find feature_tracker_ros)/../config/euroc/euroc_camera_config.yaml" />
-    <rosparam file="$(find feature_tracker_ros)/../config/euroc/euroc_config.yaml" command="load" />
-    <node name="feature_tracker" pkg="feature_tracker_ros" type="feature_tracker_node" output="screen">
+    <arg name="camera_config_path"
+        default="$(find feature_tracker_ros)/../config/euroc/camera_config.yaml" />
+
+    <arg name="ros_param_file"
+        default="$(find feature_tracker_ros)/../config/euroc/feature_tracker_configs.yaml" />
+
+    <rosparam file="$(arg ros_param_file)"
+        command="load" />
+    <node name="feature_tracker" pkg="feature_tracker_ros" type="feature_tracker_node"
+        output="screen">
         <param name="config_file" type="string" value="$(arg camera_config_path)" />
     </node>
 </launch>

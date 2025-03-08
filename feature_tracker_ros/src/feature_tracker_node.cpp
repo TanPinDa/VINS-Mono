@@ -25,6 +25,8 @@ void FeatureTrackerNode::ImageCallback(
 
 bool FeatureTrackerNode::Start() {
   restart_flag_.data = true;
+  // TODO Make this from a param
+  min_track_count_to_publish_ = 1;
 
   feature_id_channel_.name = "Feature Ids";
   feature_u_pixel_channel_.name = "Feature U Pixel";
@@ -32,6 +34,7 @@ bool FeatureTrackerNode::Start() {
   feature_x_velocity_channel_.name = "Feature X Velocity";
   feature_y_velocity_channel_.name = "Feature Y Velocity";
 
+  // TODO 1: Try to make this pass in pointer instead.
   feature_points_msg_.channels.push_back(feature_id_channel_);
   feature_points_msg_.channels.push_back(feature_u_pixel_channel_);
   feature_points_msg_.channels.push_back(feature_v_pixel_channel_);
@@ -40,7 +43,8 @@ bool FeatureTrackerNode::Start() {
 
   first_image_ = false;
 
-  // Set this upon first camera message received
+  // TODO 2: Add frame for this during first image.
+  // TODO 2: because no one consumes this.
   optical_flow_img_.header.frame_id = "TODO";
   optical_flow_img_.encoding = sensor_msgs::image_encodings::BGR8;
 
@@ -58,6 +62,10 @@ bool FeatureTrackerNode::Start() {
   }
 
   // Initialize FeatureTracker with parameters
+
+  // TODO 3: Set the fx,fy from ros param.
+  // Consider obtaining from camera params, however, depending on model there
+  // might not be a fx,fy
   feature_tracker_ = std::make_unique<FeatureTracker>(
       config_file_path, use_fisheye, enable_histogram_equalization,
       max_feature_count, min_feature_distance, ransac_threshold,
@@ -141,7 +149,7 @@ void FeatureTrackerNode::OnImageTimeMovingBackwards(
                   << std::setprecision(2) << previous_image_time_s);
 }
 void FeatureTrackerNode::OnProcessedImage(
-    cv::Mat new_frame, double current_image_time_s,
+    const cv::Mat& new_frame, double current_image_time_s,
     std::vector<cv::Point2f> features,
     std::vector<cv::Point2f> undistorted_features, std::vector<int> ids,
     std::vector<int> track_count, std::vector<cv::Point2f> points_velocity) {
@@ -169,6 +177,14 @@ void FeatureTrackerNode::OnProcessedImage(
       feature_y_velocity_channel_.values.push_back(points_velocity[i].y);
     }
   }
+  // TODO 1: Try to make this pass in pointer instead. So that we dont need to
+  // clear and pushback again
+  feature_points_msg_.channels.clear();
+  feature_points_msg_.channels.push_back(feature_id_channel_);
+  feature_points_msg_.channels.push_back(feature_u_pixel_channel_);
+  feature_points_msg_.channels.push_back(feature_v_pixel_channel_);
+  feature_points_msg_.channels.push_back(feature_x_velocity_channel_);
+  feature_points_msg_.channels.push_back(feature_y_velocity_channel_);
 
   optical_flow_img_.header.stamp = current_image_time_;
   optical_flow_img_.image = CreateOpticalFlowImage(
@@ -177,6 +193,17 @@ void FeatureTrackerNode::OnProcessedImage(
   optical_flow_image_publisher_.publish(optical_flow_img_msg_);
   feature_point_cloud_publisher_.publish(feature_points_msg_);
 }
+
+void FeatureTrackerNode::OnImageRecieved(const cv::Mat& new_frame,
+                                         double current_image_time_s) {
+  ROS_DEBUG_STREAM("Received Image with timestamp: " << current_image_time_s
+                                                     << "s");
+};
+void FeatureTrackerNode::OnHistogramEqualisation(const cv::Mat& new_frame,
+                                                 double current_image_time_s) {
+  ROS_DEBUG_STREAM("Performed Histogram equalisation on image with timestamp: "
+                   << current_image_time_s << "s");
+};
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "feature_tracker_node");
