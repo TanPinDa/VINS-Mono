@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string>
 
-#include "feature_tracker/feature_tracker.h"
+#include "feature_tracker/feature_tracker.hpp"
 #include "feature_tracker/feature_tracker_observer_spdlog_rerun.hpp"
 #include "spdlog/spdlog.h"
 int main(int argc, char** argv) {
@@ -19,8 +19,7 @@ int main(int argc, char** argv) {
 
   // FeatureTrackerObserverSPDRerun observer = FeatureTrackerObserverSPDRerun();
   feat.RegisterEventObserver(observer);
-  std::cout << "HI" << std::endl;
-
+  
   // Path to your dataset
   std::string folderPath = "/home/rosdev/workspace/data/MH_01_easy";
   std::string imageFolder = folderPath + "/mav0/cam0/data";
