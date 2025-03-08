@@ -16,7 +16,14 @@ class FeatureTrackerObserver
                                               double previous_image_time_s) = 0;
   virtual void OnImageTimeMovingBackwards(double current_image_time_s,
                                           double previous_image_time_s) = 0;
-  virtual void OnProcessedImage(cv::Mat new_frame, double current_image_time_s,
+
+  virtual void OnImageRecieved(const cv::Mat &new_frame,
+                               double current_image_time_s) = 0;
+  virtual void OnHistogramEqualisation(const cv::Mat &new_frame,
+                                    double current_image_time_s) = 0;
+
+  virtual void OnProcessedImage(const cv::Mat &new_frame,
+                                double current_image_time_s,
                                 std::vector<cv::Point2f> features,
                                 std::vector<cv::Point2f> undistorted_features,
 

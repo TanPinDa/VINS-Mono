@@ -51,7 +51,6 @@ FeatureTracker::FeatureTracker(std::string camera_config_file, bool fisheye,
   else
     base_mask_ = cv::Mat(camera_model_->imageHeight(),
                          camera_model_->imageWidth(), CV_8UC1, cv::Scalar(255));
-
 }
 
 void FeatureTracker::RegisterEventObserver(
@@ -63,8 +62,15 @@ void FeatureTracker::RegisterEventObserver(
 void FeatureTracker::ProcessNewFrame(const cv::Mat &new_frame,
                                      const double current_image_time_s) {
   cv::Mat pre_processed_img;
+  if (event_observer_) {
+    event_observer_->OnImageRecieved(new_frame, current_image_time_s);
+  }
   if (run_histogram_equilisation_) {
     clahe_->apply(new_frame, pre_processed_img);
+    if (event_observer_) {
+      event_observer_->OnHistogramEqualisation(pre_processed_img,
+                                               current_image_time_s);
+    }
   } else
     pre_processed_img = new_frame;
 
