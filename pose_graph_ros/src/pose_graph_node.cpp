@@ -14,13 +14,11 @@
 #include <geometry_msgs/PointStamped.h>
 #include <ros/package.h>
 
-#define SHOW_S_EDGE false
-#define SHOW_L_EDGE true
+#include "pose_graph_event_observer_impl.hpp"
 
 namespace pose_graph {
 
 PoseGraphNode::~PoseGraphNode() {
-  ros::shutdown();
   if (measurement_thread_.joinable()) {
     measurement_thread_.join();
   }
@@ -54,11 +52,6 @@ bool PoseGraphNode::Start() {
   camera_pose_vis_->setScale(camera_visual_size);
   camera_pose_vis_->setLineWidth(camera_visual_size / 10.0);
 
-  posegraph_visualization_ =
-      std::make_unique<CameraPoseVisualization>(1.0, 0.0, 1.0, 1.0);
-  posegraph_visualization_->setScale(0.1);
-  posegraph_visualization_->setLineWidth(0.01);
-
   loop_closure_ = (int)fs["loop_closure"];
 
   bool load_previous_pose_graph = false;
@@ -75,19 +68,13 @@ bool PoseGraphNode::Start() {
         config_file_path_.c_str());
     image_topic_ = std::string(fs["image_topic"]);
     config_.saved_pose_graph_dir = std::string(fs["pose_graph_save_path"]);
-    config_.save_debug_image = (int)fs["save_image"];
-
-    vins_result_path_ = std::string(fs["output_path"]);
     FileSystemHelper::createDirectoryIfNotExists(
         config_.saved_pose_graph_dir.c_str());
-    FileSystemHelper::createDirectoryIfNotExists(vins_result_path_.c_str());
-    vins_result_path_ = vins_result_path_ + "/vins_result_loop.csv";
 
+    config_.save_debug_image = (int)fs["save_image"];
+    config_.fast_relocalization = (int)fs["fast_relocalization"];
     visualise_imu_forward_ = (int)fs["visualise_imu_forward"];
     load_previous_pose_graph = (int)fs["load_previous_pose_graph"];
-    config_.fast_relocalization = (int)fs["fast_relocalization"];
-
-    std::ofstream fout(vins_result_path_, std::ios::out);
 
     if (load_previous_pose_graph) {
       ROS_INFO("Loading previous pose graph");
@@ -102,8 +89,10 @@ bool PoseGraphNode::Start() {
 
   StartPublishersAndSubscribers();
 
+  pose_graph_event_observer_ =
+      std::make_shared<PoseGraphEventObserverImpl>(nh_, config_file_path_);
   pose_graph_.Initialize(config_, camera_);
-  pose_graph_.RegisterEventObserver(PoseGraphEventObserver::shared_from_this());
+  pose_graph_.RegisterEventObserver(pose_graph_event_observer_);
 
   StartCommandAndProcessingThreads();
   return true;
@@ -115,21 +104,23 @@ bool PoseGraphNode::ReadParameters() {
     return false;
   }
 
-  nh_.getParam("visualization_shift_x", visualization_shift_x_);
-  nh_.getParam("visualization_shift_y", visualization_shift_y_);
   nh_.getParam("skip_cnt", skip_cnt_threshold_);
   nh_.getParam("skip_dis", skip_distance_);
 
   ROS_INFO(
-      "Loaded parameters: config_file: %s, visualization_shift_x: %d, "
-      "visualization_shift_y: %d, skip_cnt: %d, skip_dis: %f",
-      config_file_path_.c_str(), visualization_shift_x_, visualization_shift_y_,
-      skip_cnt_threshold_, skip_distance_);
+      "Loaded parameters for PoseGraphNode: config_file: %s, skip_cnt: %d, "
+      "skip_dis: %f",
+      config_file_path_.c_str(), skip_cnt_threshold_, skip_distance_);
 
   return true;
 }
 
 void PoseGraphNode::StartPublishersAndSubscribers() {
+  pub_camera_pose_visual_ = nh_.advertise<visualization_msgs::MarkerArray>(
+      "camera_pose_visual", 1000);
+  pub_key_odometrys_ =
+      nh_.advertise<visualization_msgs::Marker>("key_odometrys", 1000);
+  pub_vio_path_ = nh_.advertise<nav_msgs::Path>("no_loop_path", 1000);
   sub_imu_forward_ = nh_.subscribe<nav_msgs::Odometry>(
       "/vins_estimator/imu_propagate", 2000, &PoseGraphNode::ImuForwardCallback,
       this);
@@ -149,21 +140,6 @@ void PoseGraphNode::StartPublishersAndSubscribers() {
   sub_relo_relative_pose_ = nh_.subscribe<nav_msgs::Odometry>(
       "/vins_estimator/relo_relative_pose", 2000,
       &PoseGraphNode::ReloRelativePoseCallback, this);
-
-  pub_match_img_ = nh_.advertise<sensor_msgs::Image>("match_image", 2000);
-  pub_camera_pose_visual_ = nh_.advertise<visualization_msgs::MarkerArray>(
-      "camera_pose_visual", 1000);
-  pub_key_odometrys_ =
-      nh_.advertise<visualization_msgs::Marker>("key_odometrys", 1000);
-  pub_vio_path_ = nh_.advertise<nav_msgs::Path>("no_loop_path", 1000);
-  pub_match_points_ =
-      nh_.advertise<sensor_msgs::PointCloud>("match_points", 100);
-  pub_pg_path_ = nh_.advertise<nav_msgs::Path>("pose_graph_path", 1000);
-  pub_base_path_ = nh_.advertise<nav_msgs::Path>("base_path", 1000);
-  pub_pose_graph_ =
-      nh_.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
-  for (int i = 1; i < 10; i++)
-    pub_path_[i] = nh_.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
 }
 
 void PoseGraphNode::StartCommandAndProcessingThreads() {
@@ -294,41 +270,6 @@ void PoseGraphNode::Process() {
         {
           std::lock_guard<std::mutex> lock(process_mutex_);
           pose_graph_.AddKeyFrame(keyframe);
-          {
-            int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
-            auto kf_attribute = keyframe->getAttributes();
-            Eigen::Quaterniond quarternion{kf_attribute.rotation};
-            geometry_msgs::PoseStamped pose_stamped;
-            pose_stamped.header.stamp = ros::Time(keyframe->time_stamp);
-            pose_stamped.header.frame_id = "world";
-            pose_stamped.pose.position.x =
-                kf_attribute.position.x() + visualization_shift_x_;
-            pose_stamped.pose.position.y =
-                kf_attribute.position.y() + visualization_shift_y_;
-            pose_stamped.pose.position.z = kf_attribute.position.z();
-            pose_stamped.pose.orientation.x = quarternion.x();
-            pose_stamped.pose.orientation.y = quarternion.y();
-            pose_stamped.pose.orientation.z = quarternion.z();
-            pose_stamped.pose.orientation.w = quarternion.w();
-            path_[sequence_cnt].poses.push_back(pose_stamped);
-            path_[sequence_cnt].header = pose_stamped.header;
-
-            if (save_loop_path) {
-              std::ofstream loop_path_file(vins_result_path_, ios::app);
-              loop_path_file.setf(ios::fixed, ios::floatfield);
-              loop_path_file.precision(0);
-              loop_path_file << kf_attribute.time_stamp * 1e9 << ",";
-              loop_path_file.precision(5);
-              loop_path_file << kf_attribute.position.x() << ","
-                             << kf_attribute.position.y() << ","
-                             << kf_attribute.position.z() << ","
-                             << quarternion.w() << "," << quarternion.x() << ","
-                             << quarternion.y() << "," << quarternion.z() << ","
-                             << endl;
-              loop_path_file.close();
-            }
-          }
-          Publish();
         }
         frame_index_++;
         last_t_ = T;
@@ -342,6 +283,8 @@ void PoseGraphNode::Process() {
 void PoseGraphNode::Command() {
   if (!loop_closure_) return;
   while (ros::ok()) {
+    // Note: Since getchar() is a blocking call, a SIGINT signal will not be
+    // able to interrupt this thread. This is a known issue.
     char c = getchar();
     if (c == 's') {
       {
@@ -363,18 +306,6 @@ void PoseGraphNode::Command() {
   }
 }
 
-void PoseGraphNode::Publish() {
-  int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
-  for (int i = 1; i <= sequence_cnt; i++) {
-    pub_pg_path_.publish(path_[i]);
-    pub_path_[i].publish(path_[i]);
-    posegraph_visualization_->publish_by(pub_pose_graph_,
-                                         path_[sequence_cnt].header);
-  }
-  base_path_.header.frame_id = "world";
-  pub_base_path_.publish(base_path_);
-}
-
 void PoseGraphNode::NewSequence() {
   ROS_INFO("new sequence");
   sequence_index_++;
@@ -385,8 +316,8 @@ void PoseGraphNode::NewSequence() {
         "sequences.");
     ROS_BREAK();
   }
-  posegraph_visualization_->reset();
-  Publish();
+  pose_graph_event_observer_->ResetPoseGraphVisualisation();
+  pose_graph_event_observer_->Publish(pose_graph_.GetCurrentSequenceCount());
   {
     std::lock_guard<std::mutex> lock(buffer_mutex_);
     while (!image_buffer_.empty()) image_buffer_.pop();
@@ -394,180 +325,6 @@ void PoseGraphNode::NewSequence() {
     while (!pose_buffer_.empty()) pose_buffer_.pop();
     while (!odometry_buffer_.empty()) odometry_buffer_.pop();
   }
-}
-
-void PoseGraphNode::OnPoseGraphLoaded() { ROS_DEBUG("Pose graph loaded"); }
-
-void PoseGraphNode::OnPoseGraphSaved() { ROS_DEBUG("Pose graph saved"); }
-
-void PoseGraphNode::OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) {
-  ROS_DEBUG("On Keyframe added");
-}
-
-void PoseGraphNode::OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
-                                     int count) {
-  ROS_INFO("On Keyframe loaded");
-  Eigen::Quaterniond Q{kf_attribute.rotation};
-  geometry_msgs::PoseStamped pose_stamped;
-  pose_stamped.header.stamp = ros::Time(kf_attribute.time_stamp);
-  pose_stamped.header.frame_id = "world";
-  pose_stamped.pose.position.x =
-      kf_attribute.position.x() + visualization_shift_x_;
-  pose_stamped.pose.position.y =
-      kf_attribute.position.y() + visualization_shift_y_;
-  pose_stamped.pose.position.z = kf_attribute.position.z();
-  pose_stamped.pose.orientation.x = Q.x();
-  pose_stamped.pose.orientation.y = Q.y();
-  pose_stamped.pose.orientation.z = Q.z();
-  pose_stamped.pose.orientation.w = Q.w();
-  base_path_.poses.push_back(pose_stamped);
-  base_path_.header = pose_stamped.header;
-
-  if (count % 20 == 0) {
-    Publish();
-  }
-}
-
-void PoseGraphNode::OnKeyFrameConnectionFound(
-    KeyFrame::Attributes current_kf_attribute,
-    KeyFrame::Attributes old_kf_attribute,
-    std::vector<cv::Point2f> matched_2d_old_norm,
-    std::vector<double> matched_id, cv::Mat& thumb_image) {
-  ROS_DEBUG("On Keyframe connection found");
-  {
-    sensor_msgs::ImagePtr msg =
-        cv_bridge::CvImage(std_msgs::Header(), "bgr8", thumb_image)
-            .toImageMsg();
-    msg->header.stamp = ros::Time(current_kf_attribute.time_stamp);
-    pub_match_img_.publish(msg);
-  }
-  if (config_.fast_relocalization) {
-    sensor_msgs::PointCloud msg_match_points;
-    msg_match_points.header.stamp = ros::Time(current_kf_attribute.time_stamp);
-    for (int i = 0; i < (int)matched_2d_old_norm.size(); i++) {
-      geometry_msgs::Point32 p;
-      p.x = matched_2d_old_norm[i].x;
-      p.y = matched_2d_old_norm[i].y;
-      p.z = matched_id[i];
-      msg_match_points.points.push_back(p);
-    }
-    Eigen::Vector3d T = old_kf_attribute.position;
-    Eigen::Matrix3d R = old_kf_attribute.rotation;
-    Quaterniond Q(R);
-    sensor_msgs::ChannelFloat32 t_q_index;
-    t_q_index.values.push_back(T.x());
-    t_q_index.values.push_back(T.y());
-    t_q_index.values.push_back(T.z());
-    t_q_index.values.push_back(Q.w());
-    t_q_index.values.push_back(Q.x());
-    t_q_index.values.push_back(Q.y());
-    t_q_index.values.push_back(Q.z());
-    t_q_index.values.push_back(current_kf_attribute.index);
-    msg_match_points.channels.push_back(t_q_index);
-    pub_match_points_.publish(msg_match_points);
-  }
-}
-
-void PoseGraphNode::OnPoseGraphOptimization(
-    std::vector<KeyFrame::Attributes> kf_attributes) {
-  // ROS_INFO("On Pose graph optimization");
-  std::vector<KeyFrame::Attributes>::iterator it;
-  int sequence_cnt = pose_graph_.GetCurrentSequenceCount();
-  for (int i = 1; i <= sequence_cnt; i++) {
-    path_[i].poses.clear();
-  }
-  base_path_.poses.clear();
-  posegraph_visualization_->reset();
-
-  if (save_loop_path) {
-    std::ofstream loop_path_file_tmp(vins_result_path_, ios::out);
-    loop_path_file_tmp.close();
-  }
-
-  for (it = kf_attributes.begin(); it != kf_attributes.end(); it++) {
-    Eigen::Quaterniond Q;
-    Q = it->rotation;
-    //        printf("path p: %f, %f, %f\n",  P.x(),  P.z(),  P.y() );
-
-    geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time(it->time_stamp);
-    pose_stamped.header.frame_id = "world";
-    pose_stamped.pose.position.x = it->position.x() + visualization_shift_x_;
-    pose_stamped.pose.position.y = it->position.y() + visualization_shift_y_;
-    pose_stamped.pose.position.z = it->position.z();
-    pose_stamped.pose.orientation.x = Q.x();
-    pose_stamped.pose.orientation.y = Q.y();
-    pose_stamped.pose.orientation.z = Q.z();
-    pose_stamped.pose.orientation.w = Q.w();
-    if (it->sequence == 0) {
-      base_path_.poses.push_back(pose_stamped);
-      base_path_.header = pose_stamped.header;
-    } else {
-      path_[it->sequence].poses.push_back(pose_stamped);
-      path_[it->sequence].header = pose_stamped.header;
-    }
-
-    if (save_loop_path && !vins_result_path_.empty()) {
-      std::ofstream loop_path_file(vins_result_path_, ios::app);
-      loop_path_file.setf(ios::fixed, ios::floatfield);
-      loop_path_file.precision(0);
-      loop_path_file << it->time_stamp * 1e9 << ",";
-      loop_path_file.precision(5);
-      loop_path_file << it->position.x() << "," << it->position.y() << ","
-                     << it->position.z() << "," << Q.w() << "," << Q.x() << ","
-                     << Q.y() << "," << Q.z() << "," << endl;
-      loop_path_file.close();
-    }
-
-    if (SHOW_S_EDGE) {
-      std::vector<KeyFrame::Attributes>::reverse_iterator rit =
-          kf_attributes.rbegin();
-      std::vector<KeyFrame::Attributes>::reverse_iterator lrit;
-      for (; rit != kf_attributes.rend(); rit++) {
-        if (rit->index == it->index) {
-          lrit = rit;
-          lrit++;
-          for (int i = 0; i < 4; i++) {
-            if (lrit == kf_attributes.rend()) break;
-            if (lrit->sequence == it->sequence) {
-              posegraph_visualization_->add_edge(it->position, lrit->position);
-            }
-            lrit++;
-          }
-          break;
-        }
-      }
-    }
-    if (SHOW_L_EDGE) {
-      if (it->has_loop && it->sequence == sequence_cnt) {
-        std::find_if(
-            kf_attributes.begin(), kf_attributes.end(),
-            [&](KeyFrame::Attributes& attr) {
-              if (attr.index == it->loop_index && it->sequence > 0) {
-                posegraph_visualization_->add_loopedge(
-                    it->position,
-                    attr.position + Vector3d(visualization_shift_x_,
-                                             visualization_shift_y_, 0));
-                return true;
-              }
-              return false;
-            });
-      }
-    }
-  }
-
-  Publish();
-}
-
-void PoseGraphNode::OnNewSequentialEdge(Vector3d p1, Vector3d p2) {
-  if (!SHOW_S_EDGE) return;
-  posegraph_visualization_->add_edge(p1, p2);
-}
-
-void PoseGraphNode::OnNewLoopEdge(Vector3d p1, Vector3d p2) {
-  if (!SHOW_L_EDGE) return;
-  p2 += Vector3d(visualization_shift_x_, visualization_shift_y_, 0);
-  posegraph_visualization_->add_loopedge(p1, p2);
 }
 
 void PoseGraphNode::ImuForwardCallback(
@@ -777,9 +534,8 @@ void PoseGraphNode::ReloRelativePoseCallback(
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "pose_graph_node");
-  std::shared_ptr<pose_graph::PoseGraphNode> pose_graph_node =
-      std::make_shared<pose_graph::PoseGraphNode>();
-  if (!pose_graph_node->Start()) {
+  pose_graph::PoseGraphNode pose_graph_node;
+  if (!pose_graph_node.Start()) {
     ROS_ERROR("Failed to start PoseGraphNode");
     ros::shutdown();
   }

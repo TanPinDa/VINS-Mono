@@ -22,6 +22,7 @@ catkin_package()
 
 add_executable(pose_graph_node
     src/pose_graph_node.cpp
+    src/pose_graph_event_observer_impl.cpp
     src/utility/CameraPoseVisualization.cpp
     )
 
