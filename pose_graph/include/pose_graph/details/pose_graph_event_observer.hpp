@@ -17,24 +17,24 @@
 #include "pose_graph/details/keyframe.h"
 
 namespace pose_graph {
-class PoseGraphEventObserver
-    : public std::enable_shared_from_this<PoseGraphEventObserver> {
+class PoseGraphEventObserver {
  public:
   PoseGraphEventObserver() = default;
   virtual ~PoseGraphEventObserver() = default;
 
   virtual void OnPoseGraphLoaded() = 0;
   virtual void OnPoseGraphSaved() = 0;
-  virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute) = 0;
+  virtual void OnKeyFrameAdded(KeyFrame::Attributes kf_attribute,
+                               int sequence_count) = 0;
   virtual void OnKeyFrameLoaded(KeyFrame::Attributes kf_attribute,
-                                int count) = 0;
+                                int count, int sequence_count) = 0;
   virtual void OnKeyFrameConnectionFound(
       KeyFrame::Attributes current_kf_attribute,
       KeyFrame::Attributes old_kf_attribute,
       std::vector<cv::Point2f> matched_2d_old_norm,
       std::vector<double> matched_id, cv::Mat& thumb_image) = 0;
   virtual void OnPoseGraphOptimization(
-      std::vector<KeyFrame::Attributes> kf_attributes) = 0;
+      std::vector<KeyFrame::Attributes> kf_attributes, int sequence_count) = 0;
   virtual void OnNewSequentialEdge(Eigen::Vector3d p1, Eigen::Vector3d p2) = 0;
   virtual void OnNewLoopEdge(Eigen::Vector3d p1, Eigen::Vector3d p2) = 0;
 };
