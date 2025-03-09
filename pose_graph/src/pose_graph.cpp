@@ -241,7 +241,8 @@ bool PoseGraph::Load() {
       }
     }
     if (event_observer_) {
-      event_observer_->OnKeyFrameLoaded(current_kf_attribute, count);
+      event_observer_->OnKeyFrameLoaded(current_kf_attribute, count,
+                                        GetCurrentSequenceCount());
     }
     count++;
   }
@@ -489,7 +490,8 @@ void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe) {
   }
 
   // Generic callback
-  event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes());
+  event_observer_->OnKeyFrameAdded(current_keyframe->getAttributes(),
+                                   GetCurrentSequenceCount());
 }
 
 void PoseGraph::AddKeyFrame(std::shared_ptr<KeyFrame> current_keyframe,
@@ -1008,7 +1010,8 @@ void PoseGraph::StartOptimizationThread() {
       Optimize4DoF();
       auto kf_attributes = GetKeyFrameAttributes();
       if (event_observer_) {
-        event_observer_->OnPoseGraphOptimization(kf_attributes);
+        event_observer_->OnPoseGraphOptimization(kf_attributes,
+                                                 GetCurrentSequenceCount());
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
