@@ -9,22 +9,22 @@
 #ifndef POSE_GRAPH_ROS_POSE_GRAPH_NODE_HPP
 #define POSE_GRAPH_ROS_POSE_GRAPH_NODE_HPP
 
-#include <memory>
-#include <mutex>
-#include <thread>
-#include <queue>
-
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
-#include <opencv2/opencv.hpp>
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
-#include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/image_encodings.h>
+
+#include <memory>
+#include <mutex>
+#include <opencv2/opencv.hpp>
+#include <queue>
+#include <thread>
 
 #include "camodocal/camera_models/CameraFactory.h"
-#include "pose_graph/pose_graph.hpp"
 #include "pose_graph/details/pose_graph_event_observer.hpp"
+#include "pose_graph/pose_graph.hpp"
 #include "pose_graph_ros/utility/CameraPoseVisualization.h"
 
 namespace pose_graph {
